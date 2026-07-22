@@ -1,35 +1,52 @@
-# Pass-Auswertung für GPX-Motorradtouren
+# Passjäger — Pass-Auswertung für GPX-Motorradtouren
 
-Lade eine GPX-Datei hoch und bekomm zurück, welche **Pässe** du gefahren bist —
-mit Höhe, Kilometern und Höhenmetern pro Tag, einer Karte und einem Top-Ranking.
+GPX-Datei hochladen und zurück kommt die **Trophäensammlung**: jeder gefahrene
+Pass mit Höhe, Etappe und Uhrzeit — als Cockpit mit Karte, als Trophäenwand
+und als teilbares Hochkant-Bild für WhatsApp & Co.
 
 Live: **https://flumos.github.io/gpx-passes/**
 
+## Ansichten
+
+- **Upload** — Drag & Drop, Einstellungen (Toleranz 150/250/500 m, Wasserscheiden-Filter)
+- **Cockpit** — Stat-Leiste, dunkle Leaflet-Karte (CARTO dark) mit Akzent-Route
+  und Pass-Markern, Trophäen-Panel nach Tagen gruppiert (Sortierung Uhrzeit | Höhe),
+  Etappen-Filter auf der Karte, Hover-Kopplung Zeile ↔ Marker
+- **Trophäenwand** — Stat-Band, Top-Pässe-Karten, Tagesübersicht mit Königsetappe,
+  Karten-Panorama
+- **Teilen** — client-seitig gerendertes 1080 × 1920-Bild (Canvas) mit Route,
+  Top-3 und Stats; Web Share API mit Datei-Fallback als Download
+
 ## Wie es funktioniert
 
-Alles läuft clientseitig im Browser — die GPX-Datei verlässt deinen Rechner nicht:
+Alles läuft clientseitig im Browser — die GPX-Datei verlässt den Rechner nicht:
 
-1. **GPX parsen** → Trackpunkte (lat, lon, Höhe, Zeit).
-2. **Distanz & Höhenmeter** per Haversine, Höhenmeter aus leicht geglättetem Profil.
-3. **Pässe holen:** Für die Bounding-Box des Tracks werden alle in OpenStreetMap
-   als `mountain_pass=yes` oder `natural=saddle` getaggten, benannten Punkte über
-   die [Overpass API](https://overpass-api.de) abgefragt.
-4. **Matching:** Ein Pass zählt als gefahren, wenn der Track auf einstellbarer
-   Toleranz (Standard 250 m) an seinem Scheitel vorbeikommt. Gitter-Index für Tempo.
-5. **Dedupe:** Doppelt getaggte Punkte desselben Passes werden zusammengelegt —
-   gleichnamige, aber weit auseinanderliegende Pässe (z. B. zwei „Col de la
-   Madeleine") bleiben getrennt.
+1. **GPX parsen** → Trackpunkte (lat, lon, Höhe, Zeit)
+2. **Distanz & Höhenmeter** per Haversine, Höhenmeter aus leicht geglättetem Profil
+3. **Pässe holen:** Für die Bounding-Box des Tracks alle in OpenStreetMap als
+   `mountain_pass=yes` / `natural=saddle` getaggten, benannten Punkte via
+   [Overpass API](https://overpass-api.de) (3 Mirrors, Retry mit Backoff)
+4. **Matching:** Pass zählt, wenn der Track auf Toleranz am Scheitel vorbeikommt
+   (Gitter-Index); Dedupe von Doppel-Tags, gleichnamige entfernte Pässe bleiben getrennt
+
+## Design
+
+„Nocturne"-System (siehe `design_handoff_passjaeger/`): dunkler blaugrauer Grund,
+Inter (500 für Headings), ein Akzent #9184d9 als Linie/Glow, outlined Buttons.
+`styles.css` enthält die Tokens und Komponentenklassen. Icons: Phosphor.
 
 ## Dateien
 
-- `index.html` — UI & Styling
-- `passlib.js` — reine Logik (parsen, rechnen, Overpass, matchen), ohne DOM
-- `app.js` — Datei-Handling, Rendering, Leaflet-Karte
-- `test.mjs` — End-to-End-Test gegen eine echte GPX (`node test.mjs pfad.gpx`)
+- `index.html` — alle Views (Upload, Cockpit, Trophäenwand, Teilen-Dialog)
+- `styles.css` — Nocturne-Tokens und Komponenten (aus dem Design-Handoff)
+- `passlib.js` — reine Logik ohne DOM (parsen, rechnen, Overpass, matchen)
+- `app.js` — State, Rendering, Leaflet-Karten, Teilen-Bild (Canvas)
+- `test.mjs` — Logik-Test gegen eine echte GPX (`node test.mjs pfad.gpx`)
+- `design_handoff_passjaeger/` — Design-Referenz (Mocks + README)
 
 ## Lokal starten
 
-Statische Seite, kein Build. Einfach einen kleinen Server starten:
+Statische Seite, kein Build:
 
 ```sh
 python3 -m http.server 8000   # dann http://localhost:8000
@@ -37,9 +54,8 @@ python3 -m http.server 8000   # dann http://localhost:8000
 
 ## Grenzen
 
-- Nur Pässe, die in OpenStreetMap getaggt sind, werden gefunden.
-- Höhenmeter aus GPS-Tracks liegen oft etwas über dem realen Wert.
-- Overpass ist ein kostenloser Gemeinschaftsdienst; bei Überlastung retryt die
-  Seite automatisch — sonst kurz später nochmal probieren.
+- Nur Pässe, die in OpenStreetMap getaggt sind, werden gefunden
+- Höhenmeter aus GPS-Tracks liegen oft etwas über dem realen Wert
+- Overpass ist ein kostenloser Gemeinschaftsdienst; bei Überlastung retryt die Seite automatisch
 
-Pass-Daten © OpenStreetMap-Mitwirkende (ODbL).
+Pass-Daten © OpenStreetMap-Mitwirkende (ODbL) · Karten-Tiles © CARTO.
