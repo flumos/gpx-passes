@@ -8,7 +8,7 @@
   integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
 <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
-<link rel="stylesheet" href="styles.css?v=5">
+<link rel="stylesheet" href="styles.css?v=6">
 <style>
 /* ── Passjäger app styles (Nocturne) ─────────────────────────────────── */
 html { color-scheme: dark; }
@@ -128,7 +128,7 @@ input[type="file"] { display: none; }
 
 /* ═══ Cockpit (1b) ═══ */
 .statbar {
-  display: grid; grid-template-columns: repeat(4, 1fr);
+  display: grid; grid-template-columns: repeat(5, 1fr);
   border-bottom: 1px solid var(--color-divider);
 }
 .statbar > div { padding: 18px 28px; border-right: 1px solid var(--color-divider); min-width: 0; }
@@ -446,6 +446,10 @@ input[type="file"] { display: none; }
         <div class="stat-value" id="stat-gain">—</div>
       </div>
       <div>
+        <div class="stat-label">Kurven</div>
+        <div class="stat-value" id="stat-curves">—</div>
+      </div>
+      <div>
         <div class="stat-label">Höchster Pass</div>
         <div class="stat-value" id="stat-highest"><span class="skel"></span></div>
       </div>
@@ -483,6 +487,7 @@ input[type="file"] { display: none; }
       <div class="stats">
         <div><div class="v" id="wand-km">—</div><div class="l">Strecke</div></div>
         <div><div class="v" id="wand-gain">—</div><div class="l">Anstieg</div></div>
+        <div><div class="v" id="wand-curves">—</div><div class="l">Kurven</div></div>
         <div><div class="v" id="wand-days">—</div><div class="l">Etappen</div></div>
       </div>
     </div>
@@ -497,7 +502,7 @@ input[type="file"] { display: none; }
     <div class="wand-table">
       <h2>Tagesübersicht</h2>
       <table class="table">
-        <thead><tr><th>Tag</th><th>Datum</th><th class="num">km</th><th class="num">Anstieg</th><th class="num">Pässe</th></tr></thead>
+        <thead><tr><th>Tag</th><th>Datum</th><th class="num">km</th><th class="num">Anstieg</th><th class="num">Kurven</th><th class="num">Kehren</th><th class="num">Pässe</th></tr></thead>
         <tbody id="day-tbody"></tbody>
       </table>
     </div>
@@ -532,6 +537,11 @@ input[type="file"] { display: none; }
           <button class="btn btn-secondary" id="btn-download" type="button"><i class="ph ph-download-simple"></i>&nbsp;Bild speichern</button>
         </div>
         <div class="share-hint" id="share-hint">Nutzt das Teilen-Menü deines Geräts — WhatsApp erscheint dort automatisch.</div>
+        <div class="set-div"></div>
+        <div class="share-actions">
+          <button class="btn btn-ghost" id="btn-copy-link" type="button"><i class="ph ph-link-simple"></i>&nbsp;Link kopieren</button>
+        </div>
+        <div class="share-hint">Der Link öffnet die fertige Auswertung direkt — ohne GPX-Upload. Die Daten stecken im Link selbst, kein Server im Spiel.</div>
       </div>
     </div>
   </div>
@@ -539,7 +549,7 @@ input[type="file"] { display: none; }
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
   integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="passlib.js?v=5"></script>
-<script src="app.js?v=5"></script>
+<script src="passlib.js?v=6"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>

@@ -170,7 +170,122 @@ out body;`;
     return dedup;
   }
 
-  const api = { haversine, parseGpx, computeStats, bounds, fetchPasses, matchPasses, WATER_RE };
+  /* — Kurvenzählung — */
+  function bearing(a, b) {
+    const rad = Math.PI / 180;
+    const la1 = a.lat * rad, la2 = b.lat * rad, dLo = (b.lon - a.lon) * rad;
+    const y = Math.sin(dLo) * Math.cos(la2);
+    const x = Math.cos(la1) * Math.sin(la2) - Math.sin(la1) * Math.cos(la2) * Math.cos(dLo);
+    return Math.atan2(y, x) / rad;
+  }
+  // Zählt Kurven (kumulierte Richtungsänderung >= 45°) und Kehren (>= 135°)
+  // auf einem resampelten Track (Standard 30 m), GPS-Rauschen gefiltert.
+  function countCurves(pts, from, to, spacing) {
+    from = from || 0; to = (to == null) ? pts.length - 1 : to;
+    spacing = spacing || 30;
+    const rs = [pts[from]];
+    let last = pts[from];
+    for (let i = from + 1; i <= to; i++) {
+      if (haversine(last.lat, last.lon, pts[i].lat, pts[i].lon) >= spacing) {
+        rs.push(pts[i]); last = pts[i];
+      }
+    }
+    if (rs.length < 3) return { kurven: 0, kehren: 0 };
+    const brg = [];
+    for (let i = 1; i < rs.length; i++) brg.push(bearing(rs[i - 1], rs[i]));
+    let kurven = 0, kehren = 0, acc = 0, straight = 0;
+    const close = () => {
+      const a = Math.abs(acc);
+      if (a >= 45) { kurven++; if (a >= 135) kehren++; }
+      acc = 0;
+    };
+    for (let i = 1; i < brg.length; i++) {
+      let d = brg[i] - brg[i - 1];
+      while (d > 180) d -= 360;
+      while (d < -180) d += 360;
+      if (Math.abs(d) < 5) { // geradeaus-artig
+        straight += spacing;
+        if (straight >= 90) close(); // Kurve zu Ende nach ~90 m gerade
+        continue;
+      }
+      straight = 0;
+      if (acc !== 0 && Math.sign(d) !== Math.sign(acc) && Math.abs(d) > 8) {
+        close(); acc = d; // Richtungswechsel: alte Kurve schließen
+      } else {
+        acc += d;
+      }
+    }
+    close();
+    return { kurven, kehren };
+  }
+
+  /* — Routen-Vereinfachung (Douglas-Peucker, iterativ) — */
+  // points: [[lat, lon], ...], epsilon in Grad (~0.0008 ≈ 90 m)
+  function simplifyPath(points, epsilon) {
+    if (points.length <= 2) return points.slice();
+    const keep = new Uint8Array(points.length);
+    keep[0] = keep[points.length - 1] = 1;
+    const cosLat = Math.cos((points[0][0]) * Math.PI / 180);
+    const stack = [[0, points.length - 1]];
+    while (stack.length) {
+      const [a, b] = stack.pop();
+      if (b - a < 2) continue;
+      const ax = points[a][1] * cosLat, ay = points[a][0];
+      const bx = points[b][1] * cosLat, by = points[b][0];
+      const dx = bx - ax, dy = by - ay;
+      const len2 = dx * dx + dy * dy;
+      let maxD = -1, maxI = -1;
+      for (let i = a + 1; i < b; i++) {
+        const px = points[i][1] * cosLat, py = points[i][0];
+        let d;
+        if (len2 === 0) d = Math.hypot(px - ax, py - ay);
+        else {
+          const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
+          d = Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+        }
+        if (d > maxD) { maxD = d; maxI = i; }
+      }
+      if (maxD > epsilon) { keep[maxI] = 1; stack.push([a, maxI], [maxI, b]); }
+    }
+    const out = [];
+    for (let i = 0; i < points.length; i++) if (keep[i]) out.push(points[i]);
+    return out;
+  }
+
+  /* — Google-Polyline-Encoding (Precision 5) — */
+  function encodeNum(num) {
+    let n = num < 0 ? ~(num << 1) : (num << 1), s = '';
+    while (n >= 0x20) { s += String.fromCharCode((0x20 | (n & 0x1f)) + 63); n >>= 5; }
+    return s + String.fromCharCode(n + 63);
+  }
+  function encodePolyline(points, precision) {
+    const f = Math.pow(10, precision || 5);
+    let out = '', pLat = 0, pLon = 0;
+    for (const [lat, lon] of points) {
+      const la = Math.round(lat * f), lo = Math.round(lon * f);
+      out += encodeNum(la - pLat) + encodeNum(lo - pLon);
+      pLat = la; pLon = lo;
+    }
+    return out;
+  }
+  function decodePolyline(str, precision) {
+    const f = Math.pow(10, precision || 5);
+    const pts = [];
+    let i = 0, lat = 0, lon = 0;
+    while (i < str.length) {
+      for (const which of [0, 1]) {
+        let shift = 0, result = 0, b;
+        do { b = str.charCodeAt(i++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+        const d = (result & 1) ? ~(result >> 1) : (result >> 1);
+        if (which === 0) lat += d; else lon += d;
+      }
+      pts.push([lat / f, lon / f]);
+    }
+    return pts;
+  }
+
+  const api = { haversine, parseGpx, computeStats, bounds, fetchPasses, matchPasses, WATER_RE,
+    bearing, countCurves, simplifyPath, encodePolyline, decodePolyline };
   root.PassLib = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 

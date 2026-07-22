@@ -2,7 +2,8 @@
 /* Passjäger — App-Logik (Nocturne-Redesign).
    Reine Auswertung (parsen, rechnen, matchen) liegt in passlib.js. */
 
-const { parseGpx, computeStats, bounds, fetchPasses, matchPasses } = window.PassLib;
+const { parseGpx, computeStats, bounds, fetchPasses, matchPasses,
+  countCurves, simplifyPath, encodePolyline, decodePolyline } = window.PassLib;
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -23,7 +24,11 @@ const state = {
   ui: { sort: 'uhrzeit', topsort: 'hoehe', stageFilter: null, topExpanded: false },
   fileName: null,
   pts: null, stats: null, rawPasses: null, hits: null,
-  days: null, // [{date, tagNr|null, km, gain, firstIdx, riding}]
+  days: null, // [{date, tagNr|null, km, gain, firstIdx, riding, curves:{kurven,kehren}}]
+  routes: null, // {date: [[lat,lon],...]} — Quelle fürs Zeichnen (Datei- UND Link-Modus)
+  totals: null, // {km, gain, kurven, kehren}
+  viewer: false, // true = per Link geöffnet, keine Rohdaten/kein Rematch
+  shareUrl: null,
 };
 try {
   Object.assign(state.settings, JSON.parse(localStorage.getItem('pj.settings') || '{}'));
@@ -39,6 +44,8 @@ const hhmm = (iso) => {
   const d = new Date(iso);
   return isNaN(d) ? '' : d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
 };
+// Uhrzeit eines Treffers — im Link-Modus vorformatiert (timeStr), sonst aus ISO
+const hT = (h) => h.timeStr ?? hhmm(h.time);
 const WD = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
 const MON = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli',
   'August', 'September', 'Oktober', 'November', 'Dezember'];
@@ -74,21 +81,27 @@ function initMap1() {
   $('#zoom-in').addEventListener('click', () => map1.zoomIn());
   $('#zoom-out').addEventListener('click', () => map1.zoomOut());
 }
-function dayLatLngs(day, idxEnd) {
-  const from = day.firstIdx, to = idxEnd;
-  const step = Math.max(1, Math.floor((to - from) / 1500));
-  const arr = [];
-  for (let i = from; i <= to; i += step) arr.push([state.pts[i].lat, state.pts[i].lon]);
-  return arr;
+function dayEndIdx(d) {
+  return d + 1 < state.days.length ? state.days[d + 1].firstIdx : state.pts.length - 1;
+}
+// Routen je Tag aufbauen — aus Trackpunkten (Datei-Modus); im Link-Modus
+// kommen sie fertig decodiert aus dem Link.
+function buildRoutes() {
+  state.routes = {};
+  for (let d = 0; d < state.days.length; d++) {
+    const from = state.days[d].firstIdx, to = dayEndIdx(d);
+    const step = Math.max(1, Math.floor((to - from) / 1500));
+    const arr = [];
+    for (let i = from; i <= to; i += step) arr.push([state.pts[i].lat, state.pts[i].lon]);
+    state.routes[state.days[d].date] = arr;
+  }
 }
 function drawTrack() {
   initMap1();
   Object.values(routeLayers).forEach((l) => map1.removeLayer(l));
   routeLayers = {};
-  const days = state.days;
-  for (let d = 0; d < days.length; d++) {
-    const end = d + 1 < days.length ? days[d + 1].firstIdx : state.pts.length - 1;
-    routeLayers[days[d].date] = L.polyline(dayLatLngs(days[d], end), {
+  for (const [date, latlngs] of Object.entries(state.routes)) {
+    routeLayers[date] = L.polyline(latlngs, {
       color: C.accent, weight: 3.5, opacity: .95,
       lineCap: 'round', lineJoin: 'round', className: 'route-line',
     }).addTo(map1);
@@ -115,7 +128,7 @@ function drawMarkers() {
       m.bindTooltip(`${h.name} · ${fmtEle(h.ele)}`,
         { permanent: true, direction: 'right', offset: [12, 0], className: 'peak-label' });
     } else {
-      m.bindTooltip(`${h.name} · ${fmtEle(h.ele)}${h.time ? ' · ' + hhmm(h.time) + ' Uhr' : ''}`,
+      m.bindTooltip(`${h.name} · ${fmtEle(h.ele)}${hT(h) ? ' · ' + hT(h) + ' Uhr' : ''}`,
         { direction: 'top', offset: [0, -10] });
     }
     m.on('mouseover', () => rowHover(h, true));
@@ -212,6 +225,20 @@ function dayOf(idx) {
   return best;
 }
 const ridingDays = () => state.days.filter((d) => d.riding);
+// Kurven je Tag aus dem Roh-Track (nur Datei-Modus)
+function computeCurves() {
+  for (let d = 0; d < state.days.length; d++) {
+    state.days[d].curves = countCurves(state.pts, state.days[d].firstIdx, dayEndIdx(d));
+  }
+}
+function computeTotals() {
+  const t = { km: 0, gain: 0, kurven: 0, kehren: 0 };
+  for (const d of state.days) {
+    t.km += d.km; t.gain += d.gain;
+    if (d.curves) { t.kurven += d.curves.kurven; t.kehren += d.curves.kehren; }
+  }
+  state.totals = t;
+}
 
 /* ── Rendering ── */
 function renderHeader() {
@@ -221,10 +248,10 @@ function renderHeader() {
   $('#btn-tol-label').textContent = `Toleranz ${state.settings.toleranz} m`;
 }
 function renderStatbar() {
-  const totalKm = state.stats.cum[state.pts.length - 1];
-  let gain = 0; for (const d of state.days) gain += d.gain;
-  $('#stat-km').textContent = `${de(totalKm / 1000)} km`;
-  $('#stat-gain').textContent = fmtGain(gain);
+  $('#stat-km').textContent = `${de(state.totals.km / 1000)} km`;
+  $('#stat-gain').textContent = fmtGain(state.totals.gain);
+  $('#stat-curves').innerHTML = state.totals.kurven
+    ? `${de(state.totals.kurven)} <span class="sub">${de(state.totals.kehren)} Kehren</span>` : '—';
   if (!state.hits) {
     $('#stat-passes').innerHTML = '<span class="skel"></span>';
     $('#stat-highest').innerHTML = '<span class="skel"></span>';
@@ -276,7 +303,7 @@ function renderPanel() {
       const isBest = h === best;
       const row = document.createElement('div');
       row.className = 'tp-row' + (isBest ? ' best' : '');
-      const t = hhmm(h.time);
+      const t = hT(h);
       const sub = isBest ? [t ? t + ' Uhr' : '', 'höchster Pass der Tour'].filter(Boolean).join(' · ')
         : (t ? t + ' Uhr' : '');
       row.innerHTML = `
@@ -302,12 +329,11 @@ function renderPanelError(msg) {
 /* Trophäenwand */
 function renderWand() {
   if (!state.hits) return;
-  const totalKm = state.stats.cum[state.pts.length - 1];
-  let gain = 0; for (const d of state.days) gain += d.gain;
   $('#wand-kicker').textContent = `${state.fileName} · ${dateRangeLabel(state.days)}`;
   $('#wand-h1').textContent = `${state.hits.length} Pässe geknackt.`;
-  $('#wand-km').textContent = `${de(totalKm / 1000)} km`;
-  $('#wand-gain').textContent = fmtGain(gain);
+  $('#wand-km').textContent = `${de(state.totals.km / 1000)} km`;
+  $('#wand-gain').textContent = fmtGain(state.totals.gain);
+  $('#wand-curves').textContent = state.totals.kurven ? de(state.totals.kurven) : '—';
   const n = ridingDays().length;
   $('#wand-days').textContent = n ? `${n} ${n === 1 ? 'Tag' : 'Tage'}` : '—';
 
@@ -329,7 +355,7 @@ function renderTopGrid() {
     const first = state.ui.topsort === 'hoehe' ? i === 0 : h.name === bestName;
     const d = state.days.find((x) => x.date === h.day);
     const meta = [d && d.tagNr ? `Tag ${d.tagNr}` : (h.day !== 'ohne-datum' ? dShort(h.day) : ''),
-      hhmm(h.time) ? hhmm(h.time) + ' Uhr' : ''].filter(Boolean).join(' · ');
+      hT(h) ? hT(h) + ' Uhr' : ''].filter(Boolean).join(' · ');
     return `<div class="card top-card${first ? ' first' : ''}">
       ${first ? '<i class="ph-fill ph-trophy troph"></i>' : ''}
       <div class="rank">#${i + 1}</div>
@@ -366,6 +392,8 @@ function renderDayTable() {
       <td>${d.date === 'ohne-datum' ? '—' : `${wdShort(d.date)} ${dShort(d.date)}`}</td>
       <td class="num">${de(d.km / 1000)}</td>
       <td class="num">${fmtGain(d.gain)}</td>
+      <td class="num">${d.curves ? de(d.curves.kurven) : '—'}</td>
+      <td class="num">${d.curves ? de(d.curves.kehren) : '—'}</td>
       <td class="num">${passCell}</td>
     </tr>`;
   }).join('');
@@ -398,11 +426,16 @@ async function handleFile(file) {
   state.fileName = file.name;
   state.stats = computeStats(state.pts);
   state.hits = null; state.rawPasses = null;
+  state.viewer = false; state.shareUrl = null;
   state.ui.stageFilter = null; state.ui.topExpanded = false;
   buildDays();
+  computeCurves();
+  computeTotals();
+  buildRoutes();
 
   $('#view-upload').hidden = true;
   $('#view-results').hidden = false;
+  $('#btn-tol').hidden = false;
   showTab('cockpit');
   renderHeader(); renderStatbar(); renderPanel();
   drawTrack(); renderMapTags();
@@ -434,6 +467,7 @@ function rematch() {
   state.hits = matchPasses(state.pts, state.rawPasses,
     state.settings.toleranz, state.settings.hideWater);
   for (const h of state.hits) h.day = dayOf(h.idx);
+  state.shareUrl = null; // Treffer geändert → Link neu bauen
   renderHeader(); renderStatbar(); renderPanel(); drawMarkers(); renderWand();
   if (state.ui.stageFilter) applyStageFilter(state.ui.stageFilter);
   if (!$('#tab-wand').hidden) initPanorama();
@@ -609,23 +643,31 @@ async function renderShareCanvas() {
   yy += divH;
 
   /* Stat-Zeile */
-  const totalKm = state.stats.cum[state.pts.length - 1];
-  let gainT = 0; for (const d of state.days) gainT += d.gain;
   const rest = Math.max(0, nP - 3);
   const stats = [
-    [`${de(totalKm / 1000)} km`, 'Strecke'],
-    [fmtGain(gainT), 'Anstieg'],
-    opts.top3 && rest > 0 ? [`+${rest}`, 'weitere Pässe'] : [`${nP}`, 'Pässe'],
+    [`${de(state.totals.km / 1000)} km`, 'Strecke'],
+    [fmtGain(state.totals.gain), 'Anstieg'],
   ];
-  let sx = PADX;
+  if (state.totals.kurven) stats.push([de(state.totals.kurven), 'Kurven']);
+  stats.push(opts.top3 && rest > 0 ? [`+${rest}`, 'weitere Pässe'] : [`${nP}`, 'Pässe']);
   ctx.textBaseline = 'alphabetic';
-  for (const [v, l] of stats) {
+  /* Spaltenbreiten messen, Lücke adaptiv, damit auch 4 Stats in die Breite passen */
+  const widths = stats.map(([v, l]) => {
+    ctx.font = '500 48px Inter';
+    const vw = ctx.measureText(v).width;
+    ctx.font = '26px Inter';
+    return Math.max(vw, ctx.measureText(l).width);
+  });
+  const sumW = widths.reduce((a, b) => a + b, 0);
+  const gap = Math.max(44, Math.min(100, (W - 2 * PADX - sumW) / Math.max(1, stats.length - 1)));
+  let sx = PADX;
+  for (let i = 0; i < stats.length; i++) {
+    const [v, l] = stats[i];
     ctx.font = '500 48px Inter'; ctx.fillStyle = C.text;
     ctx.fillText(v, sx, yy + 42);
-    const vw = ctx.measureText(v).width; // vor dem Font-Wechsel messen!
     ctx.font = '26px Inter'; ctx.fillStyle = C.n500;
     ctx.fillText(l, sx, yy + 80);
-    sx += Math.max(vw, ctx.measureText(l).width) + 100;
+    sx += widths[i] + gap;
   }
   return cv;
 }
@@ -656,8 +698,8 @@ function drawShareMap(ctx, x, y, w, h) {
     ctx.bezierCurveTo(x + w * .3, cy - 40, x + w * .55, cy + 45, x + w + 20, cy - 20);
     ctx.stroke();
   }
-  /* Projektion */
-  const pts = state.pts;
+  /* Projektion — Route aus den Tages-Routen (geht auch im Link-Modus ohne Roh-Track) */
+  const pts = Object.values(state.routes).flat().map(([lat, lon]) => ({ lat, lon }));
   let mnLa = 90, mxLa = -90, mnLo = 180, mxLo = -180;
   for (const p of pts) {
     if (p.lat < mnLa) mnLa = p.lat; if (p.lat > mxLa) mxLa = p.lat;
@@ -746,6 +788,87 @@ async function doShare() {
   } catch (e) { /* abgebrochen */ }
 }
 
+/* ── Teilen per Link — Ergebnis steckt im URL-Fragment, kein Server ── */
+function b64urlFromBytes(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000)
+    s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function bytesFromB64url(str) {
+  const b = atob(str.replace(/-/g, '+').replace(/_/g, '/'));
+  const out = new Uint8Array(b.length);
+  for (let i = 0; i < b.length; i++) out[i] = b.charCodeAt(i);
+  return out;
+}
+async function compressBytes(bytes) {
+  if (typeof CompressionStream === 'undefined') return null;
+  const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+async function decompressBytes(bytes) {
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+async function buildShareLink() {
+  // Tage, Treffer und stark vereinfachte Tages-Routen kompakt serialisieren
+  const days = state.days.map((d) => [
+    d.date, d.tagNr ?? 0, Math.round(d.km), Math.round(d.gain),
+    d.curves ? d.curves.kurven : 0, d.curves ? d.curves.kehren : 0,
+  ]);
+  const dayIdx = new Map(state.days.map((d, i) => [d.date, i]));
+  const hits = (state.hits || []).map((h) => [
+    h.name, Math.round(h.ele || 0),
+    Math.round(h.lat * 1e5) / 1e5, Math.round(h.lon * 1e5) / 1e5,
+    hT(h) || '', dayIdx.get(h.day) ?? 0,
+  ]);
+  const routes = state.days.map((d) => {
+    const path = state.routes[d.date] || [];
+    let eps = 0.0015, simp = simplifyPath(path, eps);
+    while (simp.length > 300 && eps < 0.02) { eps *= 1.6; simp = simplifyPath(path, eps); }
+    return encodePolyline(simp, 4);
+  });
+  const payload = JSON.stringify({ v: 1, n: state.fileName, d: days, h: hits, r: routes });
+  const raw = new TextEncoder().encode(payload);
+  const packed = await compressBytes(raw);
+  const body = packed ? '1' + b64urlFromBytes(packed) : '0' + b64urlFromBytes(raw);
+  return `${location.origin}${location.pathname}#t=${body}`;
+}
+async function loadFromLink(body) {
+  try {
+    const bytes = bytesFromB64url(body.slice(1));
+    const raw = body[0] === '1' ? await decompressBytes(bytes) : bytes;
+    const obj = JSON.parse(new TextDecoder().decode(raw));
+    if (obj.v !== 1) throw new Error('Unbekannte Link-Version');
+    state.viewer = true;
+    state.fileName = obj.n || 'geteilte Tour';
+    state.pts = null; state.stats = null; state.rawPasses = null;
+    state.ui.stageFilter = null; state.ui.topExpanded = false;
+    state.days = obj.d.map(([date, tagNr, km, gain, kurven, kehren], i) => ({
+      date, tagNr: tagNr || null, km, gain, firstIdx: i,
+      riding: !!tagNr, curves: { kurven, kehren },
+    }));
+    state.routes = {};
+    obj.r.forEach((enc, i) => { state.routes[state.days[i].date] = decodePolyline(enc, 4); });
+    state.hits = obj.h.map(([name, ele, lat, lon, timeStr, di], i) => ({
+      name, ele: ele || null, lat, lon, timeStr, day: (state.days[di] || state.days[0]).date, idx: i,
+    }));
+    computeTotals();
+    state.shareUrl = location.href;
+
+    $('#view-upload').hidden = true;
+    $('#view-results').hidden = false;
+    $('#btn-tol').hidden = true; // ohne Roh-Track kein Rematch
+    showTab('cockpit');
+    renderHeader(); renderStatbar(); renderPanel();
+    drawTrack(); renderMapTags(); drawMarkers(); renderWand();
+    return true;
+  } catch (e) {
+    console.error('Geteilter Link konnte nicht gelesen werden:', e);
+    return false;
+  }
+}
+
 /* ── Wiring ── */
 function init() {
   reflectSettings();
@@ -786,6 +909,8 @@ function init() {
     $('#view-results').hidden = true;
     $('#view-upload').hidden = false;
     $('#file').value = '';
+    state.viewer = false;
+    history.replaceState(null, '', location.pathname + location.search);
     window.scrollTo({ top: 0 });
   });
   $('#btn-tol').addEventListener('click', (e) => {
@@ -816,8 +941,24 @@ function init() {
     $('#' + id).addEventListener('change', updateSharePreview));
   $('#btn-download').addEventListener('click', doDownload);
   $('#btn-do-share').addEventListener('click', doShare);
+  $('#btn-copy-link').addEventListener('click', async () => {
+    const b = $('#btn-copy-link');
+    try {
+      if (!state.shareUrl) state.shareUrl = await buildShareLink();
+      await navigator.clipboard.writeText(state.shareUrl);
+      const old = b.innerHTML;
+      b.innerHTML = '<i class="ph ph-check"></i>&nbsp;Kopiert';
+      setTimeout(() => { b.innerHTML = old; }, 1600);
+    } catch (e) {
+      b.innerHTML = '<i class="ph ph-warning"></i>&nbsp;Kopieren fehlgeschlagen';
+    }
+  });
+
+  /* Geteilter Link? Dann direkt ins Cockpit */
+  const m = location.hash.match(/^#t=(.+)$/);
+  if (m) loadFromLink(m[1]);
 }
 init();
 
 /* Test-Hooks */
-window.__pj = { state, handleFile, renderShareCanvas, applyStageFilter, showTab };
+window.__pj = { state, handleFile, renderShareCanvas, applyStageFilter, showTab, buildShareLink, loadFromLink };
