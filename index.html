@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pass-Auswertung — GPX-Motorradtouren</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel2: #1e222b; --line: #2a2f3a;
+    --text: #e7eaf0; --muted: #9aa3b2; --accent: #ff8a3d; --accent2: #4dd6c1;
+    --hi: #ffd24d;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#f5f6f8; --panel:#fff; --panel2:#f0f2f5; --line:#e2e5ea;
+      --text:#1a1d24; --muted:#5b6472; --accent:#e8631a; --accent2:#0f9c8a; --hi:#b8860b; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--text); }
+  header { padding:28px 20px 20px; text-align:center; border-bottom:1px solid var(--line); }
+  header h1 { margin:0 0 6px; font-size:26px; letter-spacing:-.02em; }
+  header p { margin:0; color:var(--muted); font-size:15px; }
+  main { max-width:1000px; margin:0 auto; padding:20px; }
+  .drop { border:2px dashed var(--line); border-radius:14px; padding:44px 20px; text-align:center;
+    background:var(--panel); cursor:pointer; transition:.15s; }
+  .drop:hover, .drop.over { border-color:var(--accent); background:var(--panel2); }
+  .drop strong { color:var(--accent); }
+  .drop small { display:block; color:var(--muted); margin-top:8px; }
+  input[type=file]{ display:none; }
+  .status { text-align:center; color:var(--muted); margin:18px 0; min-height:22px; }
+  .status.err { color:#ff6b6b; }
+  #results { display:none; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:20px 0; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+  .card .n { font-size:24px; font-weight:700; letter-spacing:-.02em; }
+  .card .l { color:var(--muted); font-size:13px; margin-top:2px; }
+  #map { height:420px; border-radius:14px; border:1px solid var(--line); margin:20px 0; z-index:0; }
+  h2 { font-size:19px; margin:28px 0 12px; }
+  table { width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--line);
+    border-radius:12px; overflow:hidden; font-size:14px; }
+  th,td { text-align:left; padding:9px 12px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  tr:last-child td { border-bottom:none; }
+  td.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .day { margin:22px 0; }
+  .day h3 { margin:0 0 10px; font-size:16px; display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  .day h3 .meta { color:var(--muted); font-size:13px; font-weight:400; }
+  .passlist { list-style:none; margin:0; padding:0; display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:8px; }
+  .passlist li { background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:9px 12px; display:flex; justify-content:space-between; gap:10px; align-items:baseline; }
+  .passlist li.big { border-color:var(--accent); }
+  .passlist .ele { color:var(--accent2); font-variant-numeric:tabular-nums; white-space:nowrap; font-weight:600; }
+  .passlist li.big .ele { color:var(--accent); }
+  .pname { font-weight:500; }
+  .controls { display:flex; gap:16px; align-items:center; justify-content:center; margin:14px 0; flex-wrap:wrap; color:var(--muted); font-size:14px; }
+  .controls label { display:flex; gap:7px; align-items:center; cursor:pointer; }
+  .actions { text-align:center; margin:24px 0 40px; }
+  button.reset { background:var(--panel2); color:var(--text); border:1px solid var(--line);
+    padding:9px 18px; border-radius:9px; cursor:pointer; font-size:14px; }
+  button.reset:hover { border-color:var(--accent); }
+  footer { text-align:center; color:var(--muted); font-size:13px; padding:24px; border-top:1px solid var(--line); }
+  a { color:var(--accent); }
+  .spin { display:inline-block; width:16px; height:16px; border:2px solid var(--line);
+    border-top-color:var(--accent); border-radius:50%; animation:s .8s linear infinite; vertical-align:-3px; margin-right:8px; }
+  @keyframes s { to { transform:rotate(360deg); } }
+  .leaflet-popup-content { font-size:14px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Pass-Auswertung</h1>
+  <p>GPX-Track einer Motorradtour hochladen — zurück kommt, welche Pässe du gefahren bist.</p>
+</header>
+
+<main>
+  <label class="drop" id="drop">
+    <div><strong>GPX-Datei wählen</strong> oder hierher ziehen</div>
+    <small>Läuft komplett lokal im Browser. Nur die Pass-Namen werden anonym bei OpenStreetMap nachgeschlagen.</small>
+    <input type="file" id="file" accept=".gpx,application/gpx+xml,text/xml">
+  </label>
+
+  <div class="controls">
+    <label title="Wie nah der Track am Pass-Scheitel vorbeikommen muss.">
+      Toleranz:
+      <select id="thresh">
+        <option value="150">150 m</option>
+        <option value="250" selected>250 m</option>
+        <option value="500">500 m</option>
+      </select>
+    </label>
+    <label><input type="checkbox" id="hideWater" checked> Wasserscheiden ausblenden</label>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <section id="results">
+    <div class="cards" id="cards"></div>
+    <div id="map"></div>
+    <h2>Tagesübersicht</h2>
+    <table id="daytable"><thead><tr>
+      <th>Tag</th><th>Datum</th><th class="num">km</th><th class="num">Anstieg</th><th class="num">Pässe</th>
+    </tr></thead><tbody></tbody></table>
+    <h2>Pässe nach Etappe</h2>
+    <div id="days"></div>
+    <h2>Top-Pässe nach Höhe</h2>
+    <table id="toptable"><thead><tr>
+      <th>#</th><th>Pass</th><th class="num">Höhe</th><th>Tag</th>
+    </tr></thead><tbody></tbody></table>
+    <div class="actions"><button class="reset" id="reset">Andere Datei auswerten</button></div>
+  </section>
+</main>
+
+<footer>
+  Pässe: OpenStreetMap-Daten (mountain_pass / natural=saddle) via
+  <a href="https://overpass-api.de" target="_blank" rel="noopener">Overpass API</a>.
+  Höhenmeter aus dem Track gerechnet (leicht geglättet), können GPS-bedingt etwas hoch liegen.
+  Karte: © OpenStreetMap-Mitwirkende.
+</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="passlib.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
