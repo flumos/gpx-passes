@@ -765,7 +765,52 @@ function openShare() {
   const canShare = !!(navigator.canShare && navigator.canShare({ files: [dummy] }));
   $('#btn-do-share').hidden = !canShare;
   $('#share-hint').hidden = !canShare;
+  $('#share-link-field').hidden = true;
+  /* Link schon jetzt bauen — beim Klick auf „Link kopieren" muss er sofort da
+     sein, sonst läuft die User-Geste ab (Safari verweigert dann die Zwischenablage). */
+  if (!state.shareUrl) buildShareLink().then((u) => { state.shareUrl = u; }).catch(() => {});
   updateSharePreview();
+}
+const COPY_LABEL = '<i class="ph ph-link-simple"></i>&nbsp;Link kopieren';
+async function copyShareLink() {
+  const b = $('#btn-copy-link');
+  const okFlash = () => {
+    b.innerHTML = '<i class="ph ph-check"></i>&nbsp;Kopiert';
+    setTimeout(() => { b.innerHTML = COPY_LABEL; }, 1600);
+  };
+  const urlP = state.shareUrl ? Promise.resolve(state.shareUrl)
+    : buildShareLink().then((u) => (state.shareUrl = u));
+
+  /* 1) Safari-Weg: clipboard.write SYNCHRON in der Klick-Geste,
+        Inhalt als Promise-Payload nachgereicht */
+  if (navigator.clipboard && typeof ClipboardItem !== 'undefined') {
+    try {
+      const item = new ClipboardItem({
+        'text/plain': urlP.then((u) => new Blob([u], { type: 'text/plain' })),
+      });
+      await navigator.clipboard.write([item]);
+      return okFlash();
+    } catch (e) { /* weiter zu Fallbacks */ }
+  }
+  const url = await urlP.catch(() => null);
+  if (!url) {
+    b.innerHTML = '<i class="ph ph-warning"></i>&nbsp;Link-Erstellung fehlgeschlagen';
+    return;
+  }
+  /* 2) writeText (Chrome & Co.) */
+  try { await navigator.clipboard.writeText(url); return okFlash(); } catch (e) { /* weiter */ }
+  /* 3) Legacy execCommand */
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = url; ta.style.cssText = 'position:fixed;opacity:0;';
+    document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    if (ok) return okFlash();
+  } catch (e) { /* weiter */ }
+  /* 4) Letzte Rettung: Feld einblenden, vorselektiert — Cmd+C reicht */
+  const f = $('#share-link-field');
+  f.value = url; f.hidden = false; f.focus(); f.select();
 }
 function closeShare() {
   const bd = $('#share-backdrop');
@@ -941,18 +986,7 @@ function init() {
     $('#' + id).addEventListener('change', updateSharePreview));
   $('#btn-download').addEventListener('click', doDownload);
   $('#btn-do-share').addEventListener('click', doShare);
-  $('#btn-copy-link').addEventListener('click', async () => {
-    const b = $('#btn-copy-link');
-    try {
-      if (!state.shareUrl) state.shareUrl = await buildShareLink();
-      await navigator.clipboard.writeText(state.shareUrl);
-      const old = b.innerHTML;
-      b.innerHTML = '<i class="ph ph-check"></i>&nbsp;Kopiert';
-      setTimeout(() => { b.innerHTML = old; }, 1600);
-    } catch (e) {
-      b.innerHTML = '<i class="ph ph-warning"></i>&nbsp;Kopieren fehlgeschlagen';
-    }
-  });
+  $('#btn-copy-link').addEventListener('click', copyShareLink);
 
   /* Geteilter Link? Dann direkt ins Cockpit */
   const m = location.hash.match(/^#t=(.+)$/);

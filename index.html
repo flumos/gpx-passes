@@ -8,7 +8,7 @@
   integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
 <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
-<link rel="stylesheet" href="styles.css?v=7">
+<link rel="stylesheet" href="styles.css?v=8">
 <style>
 /* ── Passjäger app styles (Nocturne) ─────────────────────────────────── */
 html { color-scheme: dark; }
@@ -541,6 +541,8 @@ input[type="file"] { display: none; }
         <div class="share-actions">
           <button class="btn btn-ghost" id="btn-copy-link" type="button"><i class="ph ph-link-simple"></i>&nbsp;Link kopieren</button>
         </div>
+        <input class="input" id="share-link-field" readonly hidden
+          aria-label="Teilen-Link — manuell kopieren" title="Cmd+C zum Kopieren">
         <div class="share-hint">Der Link öffnet die fertige Auswertung direkt — ohne GPX-Upload. Die Daten stecken im Link selbst, kein Server im Spiel.</div>
       </div>
     </div>
@@ -549,7 +551,7 @@ input[type="file"] { display: none; }
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
   integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="passlib.js?v=7"></script>
-<script src="app.js?v=7"></script>
+<script src="passlib.js?v=8"></script>
+<script src="app.js?v=8"></script>
 </body>
 </html>
