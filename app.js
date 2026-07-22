@@ -99,7 +99,7 @@ function render(pts, stats, hits) {
   const top = [...hits].sort((a, b) => (b.ele || 0) - (a.ele || 0)).slice(0, 12);
   $('#toptable tbody').innerHTML = top.map((h, i) =>
     `<tr><td>${i + 1}</td><td>${h.name}</td><td class="num">${fmtEle(h.ele)}</td>
-     <td>${weekday(h.day)} ${DE_DATE(h.day)}</td></tr>`).join('');
+     <td>${weekday(h.day)} ${DE_DATE(h.day)}</td><td class="num">${hhmm(h.time) || '—'}</td></tr>`).join('');
 
   // Sektion VOR dem Karten-Setup einblenden, sonst rechnet Leaflet
   // fitBounds auf einem 0-Pixel-Container und der Zoom stimmt nicht.
