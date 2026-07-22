@@ -80,10 +80,12 @@
 
   async function fetchPasses(bb, fetchImpl, onRetry) {
     const F = fetchImpl || fetch;
-    const q = `[out:json][timeout:120];
+    // Nur benannte Knoten abfragen — unbenannte werden eh verworfen, und die
+    // kleinere Antwort macht Timeouts/Teilergebnisse deutlich seltener.
+    const q = `[out:json][timeout:150];
 (
-  node["mountain_pass"="yes"](${bb[0]},${bb[1]},${bb[2]},${bb[3]});
-  node["natural"="saddle"](${bb[0]},${bb[1]},${bb[2]},${bb[3]});
+  node["mountain_pass"="yes"]["name"](${bb[0]},${bb[1]},${bb[2]},${bb[3]});
+  node["natural"="saddle"]["name"](${bb[0]},${bb[1]},${bb[2]},${bb[3]});
 );
 out body;`;
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -100,6 +102,14 @@ out body;`;
           if (res.status === 429 || res.status === 504) { busy = true; throw new Error('HTTP ' + res.status); }
           if (!res.ok) throw new Error('HTTP ' + res.status);
           const j = await res.json();
+          // Overpass liefert bei Überlast Status 200 mit TEIL-Ergebnis und
+          // einem remark ("runtime error: ... timed out"). Das wäre eine
+          // unvollständige Passliste — als Fehler behandeln und neu versuchen.
+          if (j.remark && /(timed?[ _]?out|error)/i.test(j.remark)) {
+            busy = true;
+            throw new Error('Overpass-Teilergebnis: ' + j.remark);
+          }
+          if (!Array.isArray(j.elements)) throw new Error('Overpass: leere Antwort');
           return j.elements.map((el) => {
             const t = el.tags || {};
             const name = t.name || t['name:de'] || t['name:fr'] || t['name:it'];
