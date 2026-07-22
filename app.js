@@ -101,8 +101,10 @@ function render(pts, stats, hits) {
     `<tr><td>${i + 1}</td><td>${h.name}</td><td class="num">${fmtEle(h.ele)}</td>
      <td>${weekday(h.day)} ${DE_DATE(h.day)}</td></tr>`).join('');
 
-  drawMap(pts, hits);
+  // Sektion VOR dem Karten-Setup einblenden, sonst rechnet Leaflet
+  // fitBounds auf einem 0-Pixel-Container und der Zoom stimmt nicht.
   results.style.display = 'block';
+  drawMap(pts, hits);
   setStatus('');
   results.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -124,13 +126,22 @@ function drawMap(pts, hits) {
   passLayer = L.layerGroup().addTo(map);
   for (const h of hits) {
     const big = (h.ele || 0) >= 2000;
+    const t = hhmm(h.time);
+    const sub = [weekday(h.day) + ' ' + DE_DATE(h.day), t ? t + ' Uhr' : '']
+      .filter(Boolean).join(' · ');
     L.circleMarker([h.lat, h.lon], {
-      radius: big ? 6 : 4, color: big ? '#ffd24d' : '#4dd6c1',
+      radius: big ? 7 : 5, color: big ? '#ffd24d' : '#4dd6c1',
       weight: 2, fillColor: '#171a21', fillOpacity: .9,
-    }).bindPopup(`<b>${h.name}</b><br>${fmtEle(h.ele)}`).addTo(passLayer);
+    }).bindPopup(
+      `<div class="pass-pop"><div class="pp-name">${h.name}</div>` +
+      `<div class="pp-ele">${fmtEle(h.ele)}</div>` +
+      `<div class="pp-sub">${sub}</div></div>`
+    ).addTo(passLayer);
   }
-  map.fitBounds(trackLayer.getBounds(), { padding: [20, 20] });
-  setTimeout(() => map.invalidateSize(), 100);
+  const fit = () => map.fitBounds(trackLayer.getBounds(), { padding: [20, 20] });
+  fit();
+  // nach dem Layout einmal Größe neu messen und erneut fitten
+  setTimeout(() => { map.invalidateSize(); fit(); }, 150);
 }
 
 // ---------- flow ----------
