@@ -28,6 +28,12 @@ const weekday = (iso) => {
   const dt = new Date(iso + 'T12:00:00');
   return WD[dt.getDay()];
 };
+// GPX-Zeit ist UTC (…Z); in Betrachter-Lokalzeit anzeigen (= reale Uhrzeit am Pass für CEST)
+const hhmm = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return isNaN(d) ? '' : d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+};
 
 function render(pts, stats, hits) {
   const N = pts.length;
@@ -79,8 +85,10 @@ function render(pts, stats, hits) {
     if (!dh.length) return '';
     const items = dh.map((h) => {
       const big = (h.ele || 0) >= bigThresh;
+      const t = hhmm(h.time);
       return `<li class="${big ? 'big' : ''}"><span class="pname">${h.name}</span>` +
-        `<span class="ele">${fmtEle(h.ele)}</span></li>`;
+        `<span class="right">${t ? `<span class="when">${t}</span>` : ''}` +
+        `<span class="ele">${fmtEle(h.ele)}</span></span></li>`;
     }).join('');
     return `<div class="day"><h3>${weekday(date)} ${DE_DATE(date)}
       <span class="meta">${fmtKm(r.km)} km · ${dh.length} ${dh.length === 1 ? 'Pass' : 'Pässe'}</span></h3>
