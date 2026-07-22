@@ -15,7 +15,12 @@ Live: **https://flumos.github.io/gpx-passes/**
 - **Trophäenwand** — Stat-Band, Top-Pässe-Karten, Tagesübersicht mit Königsetappe,
   Karten-Panorama
 - **Teilen** — client-seitig gerendertes 1080 × 1920-Bild (Canvas) mit Route,
-  Top-3 und Stats; Web Share API mit Datei-Fallback als Download
+  Top-3 und Stats; Web Share API mit Datei-Fallback als Download.
+  Zusätzlich **Teilen per Link**: das Ergebnis (Tage, Pässe, vereinfachte Route)
+  wird deflate-komprimiert ins URL-Fragment gepackt — der Link öffnet die fertige
+  Auswertung direkt, ohne GPX-Upload. Das Fragment geht nie an den Server.
+- **Kurvenzählung** — Kurven (≥ 45° Richtungsänderung) und Kehren (≥ 135°) aus
+  der Track-Geometrie (30-m-Resampling, rauschgefiltert), pro Tag und gesamt
 
 ## Wie es funktioniert
 
