@@ -68,3 +68,11 @@ python3 -m http.server 8000   # dann http://localhost:8000
 - Overpass ist ein kostenloser Gemeinschaftsdienst; bei Überlastung retryt die Seite automatisch
 
 Pass-Daten © OpenStreetMap-Mitwirkende (ODbL) · Karten-Tiles © CARTO.
+
+## Lizenz
+
+© 2026 Felix Blume. Der Quellcode ist zur Transparenz einsehbar — die Seite
+läuft komplett im Browser, und hier kann jeder nachprüfen, dass GPX-Tracks das
+Gerät nicht verlassen. Eine Lizenz zur Weiterverwendung, Vervielfältigung oder
+zum Betrieb eigener Kopien wird nicht erteilt (alle Rechte vorbehalten).
+Beiträge/Feedback gern über Issues.

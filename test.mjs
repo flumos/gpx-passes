@@ -5,7 +5,8 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const PassLib = require('./passlib.js');
 
-const gpxPath = process.argv[2] || '/Users/felix/Downloads/2026-07-xx Gesamttour.gpx';
+const gpxPath = process.argv[2]; // Aufruf: node test.mjs pfad/zur/tour.gpx
+if (!gpxPath) { console.error('Nutzung: node test.mjs <tour.gpx>'); process.exit(2); }
 const text = readFileSync(gpxPath, 'utf8');
 
 // lightweight trkpt extraction (test-only; browser uses DOMParser)
