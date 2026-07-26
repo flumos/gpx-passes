@@ -4,7 +4,7 @@ GPX-Datei hochladen und zurück kommt die **Trophäensammlung**: jeder gefahrene
 Pass mit Höhe, Etappe und Uhrzeit — als Cockpit mit Karte, als Trophäenwand
 und als teilbares Hochkant-Bild für WhatsApp & Co.
 
-Live: **https://flumos.github.io/gpx-passes/**
+Live: **https://passjaeger.app** (alt: flumos.github.io/gpx-passes → leitet weiter)
 
 ## Ansichten
 

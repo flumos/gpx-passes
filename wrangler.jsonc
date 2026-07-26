@@ -4,5 +4,9 @@
   "compatibility_date": "2026-07-01",
   "assets": {
     "directory": "./"
-  }
+  },
+  "routes": [
+    { "pattern": "passjaeger.app", "custom_domain": true },
+    { "pattern": "www.passjaeger.app", "custom_domain": true }
+  ]
 }

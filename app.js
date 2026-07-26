@@ -624,7 +624,7 @@ function buildReportText(wa) {
   [...state.hits].sort((a, b) => (b.ele || 0) - (a.ele || 0)).slice(0, 10)
     .forEach((h, i) => L.push(`${i + 1}. ${shortName(h.name)} — ${fmtEle(h.ele)}`));
   L.push('');
-  L.push('Erstellt mit Passjäger · flumos.github.io/gpx-passes');
+  L.push('Erstellt mit Passjäger · passjaeger.app');
   return L.join('\n');
 }
 let toastTimer;
