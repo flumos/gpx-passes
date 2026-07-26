@@ -29,6 +29,8 @@ const state = {
   totals: null, // {km, gain, kurven, kehren}
   viewer: false, // true = per Link geöffnet, keine Rohdaten/kein Rematch
   shareUrl: null,
+  regionAuto: {},   // date → automatischer Region-Vorschlag (Nominatim + Pässe)
+  regionManual: {}, // date → von Hand editierter Text (localStorage je Tour)
 };
 try {
   Object.assign(state.settings, JSON.parse(localStorage.getItem('pj.settings') || '{}'));
@@ -89,6 +91,7 @@ function dayEndIdx(d) {
 function buildRoutes() {
   state.routes = {};
   for (let d = 0; d < state.days.length; d++) {
+    if (state.days[d].rest) continue; // synthetischer Standtag — keine eigenen Punkte
     const from = state.days[d].firstIdx, to = dayEndIdx(d);
     const step = Math.max(1, Math.floor((to - from) / 1500));
     const arr = [];
@@ -215,9 +218,26 @@ function buildDays() {
   const list = [...state.stats.days.entries()]
     .sort((a, b) => a[1].firstIdx - b[1].firstIdx)
     .map(([date, r]) => ({ date, km: r.km, gain: r.gain, firstIdx: r.firstIdx, riding: r.km > 1000, tagNr: null }));
+  // Kalenderlücken = Standtage ohne GPX-Aufzeichnung (z. B. Pausentag) —
+  // als „—"-Zeilen synthetisieren, damit die Tagesübersicht vollständig ist.
+  const filled = [];
+  for (let i = 0; i < list.length; i++) {
+    filled.push(list[i]);
+    const next = list[i + 1];
+    if (!next || list[i].date === 'ohne-datum' || next.date === 'ohne-datum') continue;
+    let cur = new Date(list[i].date + 'T12:00:00');
+    const end = new Date(next.date + 'T12:00:00');
+    const gapDays = Math.round((end - cur) / 86400000) - 1;
+    if (gapDays < 1 || gapDays > 5) continue; // absurde Lücken nicht auffüllen
+    for (let g = 0; g < gapDays; g++) {
+      cur = new Date(cur.getTime() + 86400000);
+      filled.push({ date: cur.toISOString().slice(0, 10), km: 0, gain: 0,
+        firstIdx: next.firstIdx, riding: false, tagNr: null, rest: true });
+    }
+  }
   let n = 0;
-  for (const d of list) if (d.riding) d.tagNr = ++n;
-  state.days = list;
+  for (const d of filled) if (d.riding) d.tagNr = ++n;
+  state.days = filled;
 }
 function dayOf(idx) {
   let best = state.days[0].date;
@@ -228,6 +248,7 @@ const ridingDays = () => state.days.filter((d) => d.riding);
 // Kurven je Tag aus dem Roh-Track (nur Datei-Modus)
 function computeCurves() {
   for (let d = 0; d < state.days.length; d++) {
+    if (state.days[d].rest) { state.days[d].curves = { kurven: 0, kehren: 0 }; continue; }
     state.days[d].curves = countCurves(state.pts, state.days[d].firstIdx, dayEndIdx(d));
   }
 }
@@ -399,13 +420,258 @@ function renderDayTable() {
   }).join('');
 }
 
+/* ── Reisebericht ── */
+const tourSig = () => `${state.fileName}|${state.days ? state.days.length : 0}|${state.days && state.days[0] ? state.days[0].date : ''}`;
+function shortName(n) { return String(n).split(/\s+[-\/–]\s+/)[0]; }
+function topPassSuffix(date, n) {
+  return (state.hits || []).filter((h) => h.day === date)
+    .sort((a, b) => (b.ele || 0) - (a.ele || 0)).slice(0, n)
+    .map((h) => shortName(h.name)).join(', ');
+}
+// Effektive Region: manuell > Auto-Vorschlag > Fallback
+function regionOf(date) {
+  return state.regionManual[date] ?? state.regionAuto[date] ?? regionFallback(date);
+}
+function regionFallback(date) {
+  const d = (state.days || []).find((x) => x.date === date);
+  if (!d) return '';
+  if (!d.riding) return 'Standtag';
+  const suffix = topPassSuffix(date, 3);
+  if (suffix) return suffix;
+  const riding = ridingDays();
+  return riding.length && riding[riding.length - 1].date === date ? 'Heimfahrt' : '…';
+}
+function loadManualRegions() {
+  try { state.regionManual = JSON.parse(localStorage.getItem('pj.regions.' + tourSig()) || '{}'); }
+  catch (e) { state.regionManual = {}; }
+}
+function saveManualRegions() {
+  try { localStorage.setItem('pj.regions.' + tourSig(), JSON.stringify(state.regionManual)); } catch (e) { /* egal */ }
+}
+
+/* Nominatim-Reverse-Geocoding — höflich: sequenziell, >=1.1 s Abstand, Cache in localStorage */
+const geoSleep = (ms) => new Promise((r) => setTimeout(r, ms));
+let lastNominatimAt = 0;
+async function reverseGeocode(lat, lon) {
+  const key = 'pj.geo.' + lat.toFixed(2) + ',' + lon.toFixed(2);
+  try {
+    const c = localStorage.getItem(key);
+    if (c) return c === '∅' ? null : c;
+  } catch (e) { /* weiter */ }
+  const wait = lastNominatimAt + 1100 - Date.now();
+  if (wait > 0) await geoSleep(wait);
+  lastNominatimAt = Date.now();
+  try {
+    const res = await fetch('https://nominatim.openstreetmap.org/reverse'
+      + `?lat=${lat.toFixed(5)}&lon=${lon.toFixed(5)}&zoom=8&format=jsonv2&accept-language=de`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const j = await res.json();
+    const a = j.address || {};
+    const name = a.state || a.county || a.region || a.country || null;
+    try { localStorage.setItem(key, name || '∅'); } catch (e) { /* egal */ }
+    return name;
+  } catch (e) { return null; } // still schlucken → Fallback bleibt stehen
+}
+let geoRunFor = null;
+async function geocodeRegions() {
+  if (!state.days || !state.routes) return;
+  const sig = tourSig();
+  if (geoRunFor === sig) return; // läuft schon oder fertig
+  geoRunFor = sig;
+  const riding = ridingDays();
+  for (const d of state.days) {
+    if (state.regionAuto[d.date]) continue; // z. B. aus geteiltem Link
+    if (!d.riding) { state.regionAuto[d.date] = 'Standtag'; continue; }
+    const hasPasses = (state.hits || []).some((h) => h.day === d.date);
+    const isLast = riding.length && riding[riding.length - 1].date === d.date;
+    if (!hasPasses && isLast) { state.regionAuto[d.date] = 'Heimfahrt'; continue; }
+    const r = state.routes[d.date] || [];
+    if (r.length < 2) continue;
+    const samples = [r[0], r[Math.floor(r.length / 2)], r[r.length - 1]];
+    const names = [];
+    for (const [lat, lon] of samples) {
+      const n = await reverseGeocode(lat, lon);
+      if (sig !== tourSig()) return; // Tour gewechselt → abbrechen
+      if (n && names[names.length - 1] !== n) names.push(n);
+    }
+    let label = names.join(' → ');
+    const suffix = topPassSuffix(d.date, 2);
+    if (!label) label = regionFallback(d.date);
+    else if (suffix && (label.length + suffix.length) < 76) label += ' — ' + suffix;
+    state.regionAuto[d.date] = label;
+    // live nachziehen — aber nie eine offene Bearbeitung zerschießen
+    if (!$('#tab-bericht').hidden && !$('#tab-bericht').querySelector('.region-editing')) renderReport();
+  }
+  if (!$('#tab-bericht').hidden && !$('#tab-bericht').querySelector('.region-editing')) renderReport();
+}
+
+function renderReport() {
+  if (!state.hits) return;
+  const name = (state.fileName || 'Tour').replace(/\.gpx$/i, '');
+  const range = dateRangeLabel(state.days);
+  $('#rp-title').textContent = range ? `${name} — ${range}` : name;
+  const best = state.hits.length
+    ? state.hits.reduce((a, b) => ((b.ele || 0) > (a.ele || 0) ? b : a)) : null;
+  $('#rp-sub').textContent = [
+    `${de(state.totals.km / 1000)} km`,
+    `${fmtGain(state.totals.gain).replace(' m', ' hm')} Anstieg`,
+    `${state.hits.length} Pässe`,
+    state.totals.kurven ? `${de(state.totals.kurven)} Kurven` : '',
+    best ? `höchster Punkt ${best.name} (${fmtEle(best.ele)})` : '',
+  ].filter(Boolean).join(' · ');
+
+  /* Tagesübersicht */
+  const tbody = $('#rp-daytable');
+  tbody.innerHTML = state.days.map((d) => `<tr>
+    <td>${d.tagNr ?? '—'}</td>
+    <td>${d.date === 'ohne-datum' ? '—' : `${wdShort(d.date)} ${dShort(d.date)}`}</td>
+    <td class="num">${d.riding ? de(d.km / 1000) : '—'}</td>
+    <td class="num">${d.riding ? fmtGain(d.gain).replace(' m', ' hm') : '—'}</td>
+    <td><span class="region-cell${d.riding ? '' : ' muted'}" data-date="${d.date}" role="button" tabindex="0">${esc(regionOf(d.date))} <i class="ph ph-pencil-simple"></i></span></td>
+  </tr>`).join('');
+  tbody.querySelectorAll('.region-cell').forEach((cell) => {
+    cell.addEventListener('click', () => editRegion(cell));
+    cell.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); editRegion(cell); }
+    });
+  });
+
+  /* Etappen & Pässe */
+  $('#rp-days').innerHTML = state.days.filter((d) => d.riding).map((d) => {
+    const dh = state.hits.filter((h) => h.day === d.date).sort((a, b) => a.idx - b.idx);
+    const head = `Tag ${d.tagNr ?? ''} — ${wdShort(d.date)} ${dShort(d.date)}
+      <span class="meta">· ${esc(regionOf(d.date))} · ${de(d.km / 1000)} km · ${dh.length} ${dh.length === 1 ? 'Pass' : 'Pässe'}</span>`;
+    const items = dh.length ? dh.map((h) => {
+      const isBest = best && h === best;
+      const t = hT(h);
+      return `<li class="${isBest ? 'best' : ''}">
+        <i class="${isBest ? 'ph-fill ph-trophy' : 'ph ph-flag-banner'}"></i>
+        <span class="nm">${esc(h.name)}</span>
+        ${t ? `<span class="when">${t} Uhr</span>` : ''}
+        ${isBest ? '<span class="note">höchster Punkt der Tour</span>' : ''}
+        <span class="ele">${fmtEle(h.ele)}</span>
+      </li>`;
+    }).join('') : '<li class="none">keine Pässe</li>';
+    return `<div class="day-block"><h3>${head}</h3><ul class="pass-lines">${items}</ul></div>`;
+  }).join('');
+
+  /* Top-Pässe */
+  $('#rp-top').innerHTML = [...state.hits]
+    .sort((a, b) => (b.ele || 0) - (a.ele || 0)).slice(0, 10)
+    .map((h) => `<li><span>${esc(shortName(h.name))}</span><span class="ele">${fmtEle(h.ele)}</span></li>`)
+    .join('');
+}
+function editRegion(cell) {
+  const date = cell.dataset.date;
+  const input = document.createElement('input');
+  input.className = 'region-editing';
+  input.value = regionOf(date) === '…' ? '' : regionOf(date);
+  cell.replaceWith(input);
+  input.focus(); input.select();
+  const commit = () => {
+    const v = input.value.trim();
+    if (v && v !== state.regionAuto[date]) state.regionManual[date] = v;
+    else delete state.regionManual[date];
+    saveManualRegions();
+    state.shareUrl = null; // Regionen wandern in den Teilen-Link
+    renderReport();
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') input.blur();
+    if (e.key === 'Escape') { input.removeEventListener('blur', commit); renderReport(); }
+  });
+}
+
+function buildReportText(wa) {
+  const B = (s) => (wa ? `*${s}*` : s);
+  const name = (state.fileName || 'Tour').replace(/\.gpx$/i, '');
+  const range = dateRangeLabel(state.days);
+  const best = state.hits.length
+    ? state.hits.reduce((a, b) => ((b.ele || 0) > (a.ele || 0) ? b : a)) : null;
+  const L = [];
+  L.push(B(`${name}${range ? ' — ' + range : ''}`.toUpperCase()));
+  L.push([`${de(state.totals.km / 1000)} km`, `${fmtGain(state.totals.gain).replace(' m', ' hm')} Anstieg`,
+    `${state.hits.length} Pässe`,
+    state.totals.kurven ? `${de(state.totals.kurven)} Kurven` : '',
+  ].filter(Boolean).join(' · '));
+  L.push('');
+  L.push(B('TAGESÜBERSICHT'));
+  for (const d of state.days) {
+    const region = regionOf(d.date);
+    const datum = d.date === 'ohne-datum' ? '' : `${wdShort(d.date)} ${dShort(d.date)}`;
+    if (!d.riding) { L.push(`—     · ${datum} — ${region || 'Standtag'}`); continue; }
+    L.push(`Tag ${d.tagNr} · ${datum} · ${de(d.km / 1000)} km · ${fmtGain(d.gain).replace(' m', ' hm')}${region && region !== '…' ? ' — ' + region : ''}`);
+  }
+  L.push('');
+  L.push(B('ETAPPEN & PÄSSE'));
+  for (const d of state.days.filter((x) => x.riding)) {
+    const dh = state.hits.filter((h) => h.day === d.date).sort((a, b) => a.idx - b.idx);
+    const region = regionOf(d.date);
+    const datum = d.date === 'ohne-datum' ? '' : ` — ${wdShort(d.date)} ${dShort(d.date)}`;
+    L.push('');
+    L.push(B(`Tag ${d.tagNr}${datum}`) + (region && region !== '…' ? ` (${region})` : ''));
+    if (!dh.length) { L.push('• keine Pässe'); continue; }
+    for (const h of dh) {
+      const isBest = best && h === best;
+      const t = hT(h);
+      const nm = isBest && wa ? `*${h.name}*` : h.name;
+      L.push(`${isBest ? '🏆' : '•'} ${nm} (${fmtEle(h.ele)})${t ? ` · ${t} Uhr` : ''}${isBest ? ' — höchster Punkt der Tour' : ''}`);
+    }
+  }
+  L.push('');
+  L.push(B('TOP-PÄSSE'));
+  [...state.hits].sort((a, b) => (b.ele || 0) - (a.ele || 0)).slice(0, 10)
+    .forEach((h, i) => L.push(`${i + 1}. ${shortName(h.name)} — ${fmtEle(h.ele)}`));
+  L.push('');
+  L.push('Erstellt mit Passjäger · flumos.github.io/gpx-passes');
+  return L.join('\n');
+}
+let toastTimer;
+function showToast(msg) {
+  const t = $('#rp-toast');
+  $('#rp-toast-text').textContent = msg;
+  t.hidden = false;
+  requestAnimationFrame(() => t.classList.add('show'));
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+async function copyReport(wa) {
+  const text = buildReportText(wa);
+  const done = () => showToast(`Bericht kopiert — ${de(text.length)} Zeichen, bereit zum Einfügen`);
+  /* Safari-Weg: synchron in der Klick-Geste */
+  if (navigator.clipboard && typeof ClipboardItem !== 'undefined') {
+    try {
+      await navigator.clipboard.write([new ClipboardItem({
+        'text/plain': new Blob([text], { type: 'text/plain' }),
+      })]);
+      return done();
+    } catch (e) { /* weiter */ }
+  }
+  try { await navigator.clipboard.writeText(text); return done(); } catch (e) { /* weiter */ }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.cssText = 'position:fixed;opacity:0;';
+    document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    if (ok) return done();
+  } catch (e) { /* weiter */ }
+  /* Letzte Rettung: Textfeld einblenden, vorselektiert */
+  const f = $('#rp-copy-field');
+  f.value = text; f.hidden = false; f.focus(); f.select();
+}
+
 /* ── Tabs ── */
 function showTab(which) {
   $('#tab-cockpit').hidden = which !== 'cockpit';
   $('#tab-wand').hidden = which !== 'wand';
+  $('#tab-bericht').hidden = which !== 'bericht';
   $('#tab-link-cockpit').setAttribute('aria-current', which === 'cockpit' ? 'page' : 'false');
   $('#tab-link-wand').setAttribute('aria-current', which === 'wand' ? 'page' : 'false');
+  $('#tab-link-bericht').setAttribute('aria-current', which === 'bericht' ? 'page' : 'false');
   if (which === 'wand' && state.hits) initPanorama();
+  if (which === 'bericht' && state.hits) { renderReport(); geocodeRegions(); }
   if (which === 'cockpit' && map1) setTimeout(() => map1.invalidateSize(), 60);
 }
 
@@ -432,6 +698,8 @@ async function handleFile(file) {
   computeCurves();
   computeTotals();
   buildRoutes();
+  state.regionAuto = {}; geoRunFor = null;
+  loadManualRegions();
 
   $('#view-upload').hidden = true;
   $('#view-results').hidden = false;
@@ -468,9 +736,10 @@ function rematch() {
     state.settings.toleranz, state.settings.hideWater);
   for (const h of state.hits) h.day = dayOf(h.idx);
   state.shareUrl = null; // Treffer geändert → Link neu bauen
-  renderHeader(); renderStatbar(); renderPanel(); drawMarkers(); renderWand();
+  renderHeader(); renderStatbar(); renderPanel(); drawMarkers(); renderWand(); renderReport();
   if (state.ui.stageFilter) applyStageFilter(state.ui.stageFilter);
   if (!$('#tab-wand').hidden) initPanorama();
+  geocodeRegions(); // Regionen im Hintergrund nachladen (gecacht, höflich gedrosselt)
 }
 
 /* ── Einstellungen (beide Instanzen synchron) ── */
@@ -873,7 +1142,9 @@ async function buildShareLink() {
     while (simp.length > 300 && eps < 0.02) { eps *= 1.6; simp = simplifyPath(path, eps); }
     return encodePolyline(simp, 4);
   });
-  const payload = JSON.stringify({ v: 1, n: state.fileName, d: days, h: hits, r: routes });
+  // Effektive Regionen (manuell > auto, keine Platzhalter) für den Reisebericht mitgeben
+  const regions = state.days.map((d) => state.regionManual[d.date] ?? state.regionAuto[d.date] ?? '');
+  const payload = JSON.stringify({ v: 1, n: state.fileName, d: days, h: hits, r: routes, g: regions });
   const raw = new TextEncoder().encode(payload);
   const packed = await compressBytes(raw);
   const body = packed ? '1' + b64urlFromBytes(packed) : '0' + b64urlFromBytes(raw);
@@ -894,11 +1165,16 @@ async function loadFromLink(body) {
       riding: !!tagNr, curves: { kurven, kehren },
     }));
     state.routes = {};
-    obj.r.forEach((enc, i) => { state.routes[state.days[i].date] = decodePolyline(enc, 4); });
+    obj.r.forEach((enc, i) => { if (enc) state.routes[state.days[i].date] = decodePolyline(enc, 4); });
     state.hits = obj.h.map(([name, ele, lat, lon, timeStr, di], i) => ({
       name, ele: ele || null, lat, lon, timeStr, day: (state.days[di] || state.days[0]).date, idx: i,
     }));
     computeTotals();
+    state.regionAuto = {}; geoRunFor = null;
+    if (Array.isArray(obj.g)) {
+      obj.g.forEach((g, i) => { if (g && state.days[i]) state.regionAuto[state.days[i].date] = g; });
+    }
+    loadManualRegions();
     state.shareUrl = location.href;
 
     $('#view-upload').hidden = true;
@@ -906,7 +1182,7 @@ async function loadFromLink(body) {
     $('#btn-tol').hidden = true; // ohne Roh-Track kein Rematch
     showTab('cockpit');
     renderHeader(); renderStatbar(); renderPanel();
-    drawTrack(); renderMapTags(); drawMarkers(); renderWand();
+    drawTrack(); renderMapTags(); drawMarkers(); renderWand(); renderReport();
     return true;
   } catch (e) {
     console.error('Geteilter Link konnte nicht gelesen werden:', e);
@@ -972,6 +1248,11 @@ function init() {
   /* Tabs */
   $('#tab-link-cockpit').addEventListener('click', (e) => { e.preventDefault(); showTab('cockpit'); });
   $('#tab-link-wand').addEventListener('click', (e) => { e.preventDefault(); showTab('wand'); });
+  $('#tab-link-bericht').addEventListener('click', (e) => { e.preventDefault(); showTab('bericht'); });
+
+  /* Reisebericht kopieren */
+  $('#btn-copy-report').addEventListener('click', () => copyReport(false));
+  $('#btn-copy-wa').addEventListener('click', () => copyReport(true));
 
   /* Teilen */
   $('#btn-share').addEventListener('click', openShare);
@@ -995,4 +1276,4 @@ function init() {
 init();
 
 /* Test-Hooks */
-window.__pj = { state, handleFile, renderShareCanvas, applyStageFilter, showTab, buildShareLink, loadFromLink };
+window.__pj = { state, handleFile, renderShareCanvas, applyStageFilter, showTab, buildShareLink, loadFromLink, renderReport, buildReportText, geocodeRegions };

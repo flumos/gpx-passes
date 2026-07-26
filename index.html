@@ -8,7 +8,7 @@
   integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
 <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
-<link rel="stylesheet" href="styles.css?v=8">
+<link rel="stylesheet" href="styles.css?v=9">
 <style>
 /* ── Passjäger app styles (Nocturne) ─────────────────────────────────── */
 html { color-scheme: dark; }
@@ -274,6 +274,65 @@ input[type="file"] { display: none; }
 .pano-label { position: absolute; left: 16px; top: 14px; font-size: 12px; color: var(--color-neutral-400); z-index: 900; }
 .pano-attr { position: absolute; right: 16px; bottom: 10px; font-size: 10.5px; color: var(--color-neutral-600); z-index: 900; }
 
+/* ═══ Reisebericht ═══ */
+.report-wrap { max-width: 880px; margin: 0 auto; padding: 36px 28px 64px; }
+.report-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; margin-bottom: 8px; }
+.report-head h1 { font: 500 30px/1.15 var(--font-heading); letter-spacing: -0.01em; margin: 0; }
+.report-sub { font-size: 13.5px; color: var(--color-neutral-400); margin-top: 6px; font-feature-settings: "tnum" 1; }
+.report-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.copy-hint { font-size: 11.5px; color: var(--color-neutral-600); margin: 10px 0 26px; }
+.report h2 {
+  font: 500 17px var(--font-heading); margin: 34px 0 12px;
+  display: flex; align-items: baseline; gap: 10px;
+}
+.report h2::before { content: ""; width: 22px; height: 1px; background: var(--color-accent); align-self: center; }
+.rp-table { width: 100%; border-collapse: collapse; font-size: 14px; font-feature-settings: "tnum" 1; }
+.rp-table th { text-align: left; font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--color-neutral-500); padding: 8px 10px; }
+.rp-table td { padding: 8px 10px; border-top: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent); }
+.rp-table td.num, .rp-table th.num { text-align: right; }
+.region-cell { display: flex; align-items: center; gap: 8px; cursor: text; }
+.region-cell.muted { color: var(--color-neutral-500); }
+.region-cell i { font-size: 13px; color: var(--color-neutral-600); opacity: 0; transition: opacity .12s; flex: none; }
+tr:hover .region-cell i { opacity: 1; }
+.region-editing {
+  background: var(--color-surface); border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm); padding: 4px 8px; font: inherit; color: var(--color-text);
+  width: 100%;
+}
+.day-block { margin: 18px 0 22px; }
+.day-block h3 { font: 500 14.5px var(--font-heading); margin: 0 0 8px; }
+.day-block h3 .meta { color: var(--color-neutral-500); font-weight: 400; font-size: 13px; }
+.pass-lines { list-style: none; margin: 0; padding: 0; }
+.pass-lines li {
+  display: flex; align-items: baseline; gap: 10px; padding: 5px 0 5px 2px;
+  font-size: 14px; border-bottom: 1px solid color-mix(in srgb, var(--color-text) 5%, transparent);
+}
+.pass-lines li:last-child { border-bottom: none; }
+.pass-lines .ele { margin-left: auto; font-feature-settings: "tnum" 1; color: var(--color-neutral-300); white-space: nowrap; }
+.pass-lines i { font-size: 15px; color: var(--color-neutral-500); flex: none; }
+.pass-lines li.best i { color: var(--color-accent-300); }
+.pass-lines li.best .nm { font-weight: 500; }
+.pass-lines li.best .ele { color: var(--color-accent-300); }
+.pass-lines .when, .pass-lines .note { color: var(--color-neutral-500); font-size: 12.5px; }
+.pass-lines li.none { color: var(--color-neutral-500); border-bottom: none; }
+.top-list { margin: 0; padding: 0 0 0 4px; list-style: none; counter-reset: n; font-feature-settings: "tnum" 1; }
+.top-list li { counter-increment: n; display: flex; gap: 12px; padding: 5px 0; font-size: 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-text) 5%, transparent); }
+.top-list li::before { content: "#" counter(n); font: 500 12px ui-monospace, Menlo, monospace; color: var(--color-neutral-500); width: 26px; flex: none; }
+.top-list li:first-child::before { color: var(--color-accent); }
+.top-list .ele { margin-left: auto; color: var(--color-neutral-300); }
+.top-list li:first-child .ele { color: var(--color-accent-300); }
+.report-foot { margin-top: 36px; font-size: 11.5px; color: var(--color-neutral-600); }
+.toast {
+  position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); z-index: 1500;
+  background: var(--color-surface); border-radius: var(--radius-md); box-shadow: var(--shadow-md);
+  padding: 10px 18px; font-size: 13.5px; display: flex; gap: 8px; align-items: center;
+  opacity: 0; transition: opacity 160ms ease; pointer-events: none;
+}
+.toast.show { opacity: 1; }
+.toast i { color: var(--color-accent); }
+
 /* ═══ Teilen-Dialog (2a) ═══ */
 .dialog-backdrop {
   z-index: 2000; background: color-mix(in srgb, black 45%, transparent);
@@ -401,6 +460,7 @@ input[type="file"] { display: none; }
     <nav class="res-tabs">
       <a href="#" id="tab-link-cockpit" aria-current="page">Cockpit</a>
       <a href="#" id="tab-link-wand">Trophäenwand</a>
+      <a href="#" id="tab-link-bericht">Reisebericht</a>
     </nav>
     <div class="res-actions">
       <button class="btn btn-ghost" id="btn-tol" type="button"><i class="ph ph-sliders-horizontal"></i>&nbsp;<span id="btn-tol-label">Toleranz 250 m</span></button>
@@ -512,6 +572,40 @@ input[type="file"] { display: none; }
       <div class="pano-attr">© OpenStreetMap · © CARTO</div>
     </div>
   </div>
+
+  <!-- Reisebericht -->
+  <div id="tab-bericht" hidden>
+    <main class="report-wrap report">
+      <div class="report-head">
+        <div>
+          <h1 id="rp-title">Tour</h1>
+          <div class="report-sub" id="rp-sub"></div>
+        </div>
+        <div class="report-actions">
+          <button class="btn btn-primary" id="btn-copy-report" type="button"><i class="ph ph-copy"></i>&nbsp;Bericht kopieren</button>
+          <button class="btn btn-ghost" id="btn-copy-wa" type="button"><i class="ph ph-whatsapp-logo"></i>&nbsp;WhatsApp-Format</button>
+        </div>
+      </div>
+      <div class="copy-hint">Kopiert den kompletten Bericht als Text — zum Einfügen in WhatsApp, E-Mail oder wohin du willst. Die Region-Spalte ist ein Vorschlag: anklicken und eigene Worte draus machen.</div>
+      <textarea class="input" id="rp-copy-field" readonly hidden rows="8"
+        aria-label="Bericht — manuell kopieren" title="Cmd+C zum Kopieren"></textarea>
+
+      <h2>Tagesübersicht</h2>
+      <table class="rp-table">
+        <thead><tr><th>Tag</th><th>Datum</th><th class="num">km</th><th class="num">Anstieg</th><th style="width:45%">Region</th></tr></thead>
+        <tbody id="rp-daytable"></tbody>
+      </table>
+
+      <h2>Etappen &amp; Pässe</h2>
+      <div id="rp-days"></div>
+
+      <h2>Top-Pässe nach Höhe</h2>
+      <ol class="top-list" id="rp-top"></ol>
+
+      <div class="report-foot">Erstellt mit Passjäger · flumos.github.io/gpx-passes · Pässe: © OpenStreetMap-Mitwirkende · Regionen: © Nominatim/OSM</div>
+    </main>
+    <div class="toast" id="rp-toast" hidden><i class="ph ph-check-circle"></i><span id="rp-toast-text"></span></div>
+  </div>
 </div>
 
 <!-- ═══ 2a Teilen-Dialog ═══ -->
@@ -551,7 +645,7 @@ input[type="file"] { display: none; }
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
   integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="passlib.js?v=8"></script>
-<script src="app.js?v=8"></script>
+<script src="passlib.js?v=9"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>

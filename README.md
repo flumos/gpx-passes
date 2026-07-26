@@ -14,6 +14,10 @@ Live: **https://flumos.github.io/gpx-passes/**
   Etappen-Filter auf der Karte, Hover-Kopplung Zeile ↔ Marker
 - **Trophäenwand** — Stat-Band, Top-Pässe-Karten, Tagesübersicht mit Königsetappe,
   Karten-Panorama
+- **Reisebericht** — Tagesübersicht mit automatischen Region-Vorschlägen
+  (Nominatim-Reverse-Geocoding, editierbar), Etappen mit Pässen + Uhrzeiten,
+  Top-Pässe; als Plain-Text oder WhatsApp-Format (mit `*fett*` und 🏆)
+  kopierbar zum Weiterverschicken. Editierte Regionen wandern in den Teilen-Link.
 - **Teilen** — client-seitig gerendertes 1080 × 1920-Bild (Canvas) mit Route,
   Top-3 und Stats; Web Share API mit Datei-Fallback als Download.
   Zusätzlich **Teilen per Link**: das Ergebnis (Tage, Pässe, vereinfachte Route)
