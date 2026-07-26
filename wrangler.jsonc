@@ -1,0 +1,8 @@
+{
+  // Cloudflare Workers — statische Seite via Static Assets (kein Worker-Script nötig)
+  "name": "gpx-passes",
+  "compatibility_date": "2026-07-01",
+  "assets": {
+    "directory": "./"
+  }
+}
