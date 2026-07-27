@@ -1,5 +1,12 @@
 /* Nocturne — design-system tokens and component classes. This file is the source of truth for the system's look; retune it here and see readme.md. */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+/* Inter (Variable Font, latin) — self-hosted für Offline/PWA */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("vendor/inter/inter-var-latin.woff2") format("woff2");
+}
 
 :root {
   --color-bg: #161826;

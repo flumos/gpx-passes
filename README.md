@@ -53,6 +53,15 @@ Inter (500 für Headings), ein Akzent #9184d9 als Linie/Glow, outlined Buttons.
 - `test.mjs` — Logik-Test gegen eine echte GPX (`node test.mjs pfad.gpx`)
 - `design_handoff_passjaeger/` — Design-Referenz (Mocks + README)
 
+## PWA
+
+Passjäger ist installierbar (Android: Install-Prompt bzw. Menü; iOS: Teilen →
+„Zum Home-Bildschirm", Anleitung in der App unter „···"). Installiert läuft die
+App offline (Shell + zuletzt geladene Karten-Tiles), auf Android lassen sich
+GPX-Dateien direkt per „Teilen mit Passjäger" öffnen. Alle Assets (Leaflet,
+Phosphor, Inter) sind self-hosted — keine CDN-Abhängigkeiten. Updates meldet
+die App mit einem „Aktualisieren"-Hinweis.
+
 ## Lokal starten
 
 Statische Seite, kein Build:

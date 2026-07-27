@@ -1308,5 +1308,104 @@ function init() {
 }
 init();
 
+/* ── PWA: Service Worker, Updates, Share-Target, Install ── */
+(function initPWA() {
+  if (!('serviceWorker' in navigator)) return;
+
+  /* Registrierung + Update-Flow (kein Auto-skipWaiting — Nutzer entscheidet) */
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    const showUpdate = (waiting) => {
+      const bar = $('#update-bar');
+      bar.hidden = false;
+      $('#btn-update').addEventListener('click', () => {
+        bar.hidden = true;
+        waiting.postMessage('skip-waiting');
+      }, { once: true });
+    };
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const nw = reg.installing;
+      if (!nw) return;
+      nw.addEventListener('statechange', () => {
+        if (nw.state === 'installed' && navigator.serviceWorker.controller) showUpdate(nw);
+      });
+    });
+  }).catch(() => { /* z. B. private mode */ });
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloading) return;
+    reloading = true;
+    location.reload();
+  });
+
+  /* Share-Target (Android): SW hat die GPX in den Cache gelegt */
+  if (new URLSearchParams(location.search).has('shared')) {
+    (async () => {
+      try {
+        const c = await caches.open('pj-share-in');
+        const res = await c.match('/shared-gpx');
+        if (res) {
+          const name = decodeURIComponent(res.headers.get('X-File-Name') || 'tour.gpx');
+          const blob = await res.blob();
+          await c.delete('/shared-gpx');
+          history.replaceState(null, '', location.pathname);
+          handleFile(new File([blob], name, { type: 'application/gpx+xml' }));
+        }
+      } catch (e) { /* still */ }
+    })();
+  }
+
+  /* File Handler (Chromium Desktop: GPX-Doppelklick) */
+  if ('launchQueue' in window) {
+    window.launchQueue.setConsumer(async (params) => {
+      if (params.files && params.files.length) {
+        const f = await params.files[0].getFile();
+        handleFile(f);
+      }
+    });
+  }
+})();
+
+/* Install-Eintrag im Optionen-Sheet */
+(function initInstall() {
+  const btn = $('#btn-install');
+  if (!btn) return;
+  const standalone = matchMedia('(display-mode: standalone)').matches
+    || navigator.standalone === true;
+  if (standalone) return; // bereits installiert — Eintrag bleibt hidden
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  let deferredPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    btn.hidden = false;
+  });
+  if (isIOS) btn.hidden = false;
+  btn.addEventListener('click', async () => {
+    document.querySelector('#sheet-backdrop').classList.remove('open');
+    setTimeout(() => { document.querySelector('#sheet-backdrop').hidden = true; }, 180);
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') btn.hidden = true;
+      deferredPrompt = null;
+    } else {
+      const bd = $('#ios-install-backdrop');
+      bd.hidden = false;
+      requestAnimationFrame(() => bd.classList.add('open'));
+    }
+  });
+  const closeIos = () => {
+    const bd = $('#ios-install-backdrop');
+    bd.classList.remove('open');
+    setTimeout(() => { bd.hidden = true; }, 180);
+  };
+  $('#ios-install-close').addEventListener('click', closeIos);
+  $('#ios-install-backdrop').addEventListener('click', (e) => {
+    if (e.target === $('#ios-install-backdrop')) closeIos();
+  });
+})();
+
 /* Test-Hooks */
 window.__pj = { state, handleFile, renderShareCanvas, applyStageFilter, showTab, buildShareLink, loadFromLink, renderReport, buildReportText, geocodeRegions };
