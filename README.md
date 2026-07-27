@@ -32,8 +32,9 @@ Alles läuft clientseitig im Browser — die GPX-Datei verlässt den Rechner nic
 
 1. **GPX parsen** → Trackpunkte (lat, lon, Höhe, Zeit)
 2. **Distanz & Höhenmeter** per Haversine, Höhenmeter aus leicht geglättetem Profil
-3. **Pässe holen:** Für die Bounding-Box des Tracks alle in OpenStreetMap als
-   `mountain_pass=yes` / `natural=saddle` getaggten, benannten Punkte via
+3. **Pässe holen:** In Europa aus **eigenen statischen POI-Kacheln** (1°×1°-Raster
+   unter `pois/`, vorberechnet aus OSM — schnell, zuverlässig, offlinefähig);
+   außerhalb der Abdeckung als Fallback via
    [Overpass API](https://overpass-api.de) (3 Mirrors, Retry mit Backoff)
 4. **Matching:** Pass zählt, wenn der Track auf Toleranz am Scheitel vorbeikommt
    (Gitter-Index); Dedupe von Doppel-Tags, gleichnamige entfernte Pässe bleiben getrennt
@@ -77,6 +78,16 @@ python3 -m http.server 8000   # dann http://localhost:8000
 - Overpass ist ein kostenloser Gemeinschaftsdienst; bei Überlastung retryt die Seite automatisch
 
 Pass-Daten © OpenStreetMap-Mitwirkende (ODbL) · Karten-Tiles © CARTO.
+
+## Datengrundlage
+
+Die Pass-Daten (`pois/`) stammen aus OpenStreetMap (© OpenStreetMap contributors,
+[ODbL 1.0](https://opendatacommons.org/licenses/odbl/)) und werden mit
+`tools/build-pois.sh` aus Geofabrik-Länder-Extracts gebaut (benannte
+`mountain_pass=yes`- und `natural=saddle`-Knoten, Europa-weit, 1°×1°-Kacheln).
+Der OSM-abgeleitete Extrakt wird auf Anfrage gern herausgegeben — er liegt
+ohnehin offen in diesem Repo unter `pois/`. Zum Aktualisieren Pipeline neu
+laufen lassen (resumefähig, Spitzen-Diskbedarf ≈ größtes Land ~5 GB).
 
 ## Lizenz
 

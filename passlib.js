@@ -180,6 +180,30 @@ out body;`;
     return dedup;
   }
 
+  // Statische POI-Kacheln (1°×1°, eigene Daten auf dem Server) statt Overpass.
+  // 404 = leere Kachel (Meer/passfreie Gegend). Format je Kachel:
+  // [[name, ele|null, lat, lon], ...]
+  async function fetchPassesLocal(bb, baseUrl, fetchImpl) {
+    const F = fetchImpl || fetch;
+    const base = baseUrl || '';
+    const tn = (v) => (v < 0 ? 'm' + Math.abs(v) : String(v));
+    const jobs = [];
+    for (let la = Math.floor(bb[0]); la <= Math.floor(bb[2]); la++) {
+      for (let lo = Math.floor(bb[1]); lo <= Math.floor(bb[3]); lo++) {
+        jobs.push(
+          F(base + 'pois/' + tn(la) + '_' + tn(lo) + '.json')
+            .then((r) => (r.ok ? r.json() : []))
+            .catch(() => [])
+        );
+      }
+    }
+    const out = [];
+    for (const arr of await Promise.all(jobs)) {
+      for (const [name, ele, lat, lon] of arr) out.push({ name, ele, lat, lon });
+    }
+    return out;
+  }
+
   /* — Kurvenzählung — */
   function bearing(a, b) {
     const rad = Math.PI / 180;
@@ -294,7 +318,7 @@ out body;`;
     return pts;
   }
 
-  const api = { haversine, parseGpx, computeStats, bounds, fetchPasses, matchPasses, WATER_RE,
+  const api = { haversine, parseGpx, computeStats, bounds, fetchPasses, fetchPassesLocal, matchPasses, WATER_RE,
     bearing, countCurves, simplifyPath, encodePolyline, decodePolyline };
   root.PassLib = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

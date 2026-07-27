@@ -2,7 +2,7 @@
 /* Passjäger — App-Logik (Nocturne-Redesign).
    Reine Auswertung (parsen, rechnen, matchen) liegt in passlib.js. */
 
-const { parseGpx, computeStats, bounds, fetchPasses, matchPasses,
+const { parseGpx, computeStats, bounds, fetchPasses, fetchPassesLocal, matchPasses,
   countCurves, simplifyPath, encodePolyline, decodePolyline } = window.PassLib;
 
 const $ = (s) => document.querySelector(s);
@@ -711,20 +711,47 @@ async function handleFile(file) {
   drawTrack(); renderMapTags();
   await runMatching(false);
 }
+/* Abdeckung der statischen POI-Kacheln (pois/meta.json), einmalig geladen.
+   null = keine Kacheln verfügbar → Overpass. */
+async function loadPoiMeta() {
+  if (state.poiMeta !== undefined) return state.poiMeta;
+  try {
+    const r = await fetch('pois/meta.json');
+    state.poiMeta = r.ok ? await r.json() : null;
+  } catch (e) { state.poiMeta = null; }
+  return state.poiMeta;
+}
+async function fetchViaOverpass() {
+  return fetchPasses(bounds(state.pts), undefined, (round) => {
+    const list = $('#tp-list');
+    let note = list.querySelector('.tp-note');
+    if (!note) {
+      note = document.createElement('div');
+      note.className = 'tp-note';
+      list.prepend(note);
+    }
+    note.textContent = `OpenStreetMap-Dienst ausgelastet — neuer Versuch (${round}/3) …`;
+  });
+}
 async function runMatching(refetch) {
   try {
     if (!state.rawPasses || refetch) {
       renderPanel(); // Skeleton
-      state.rawPasses = await fetchPasses(bounds(state.pts), undefined, (round) => {
-        const list = $('#tp-list');
-        let note = list.querySelector('.tp-note');
-        if (!note) {
-          note = document.createElement('div');
-          note.className = 'tp-note';
-          list.prepend(note);
+      const meta = await loadPoiMeta();
+      const bb = bounds(state.pts);
+      const covered = meta && meta.bbox
+        && bb[0] >= meta.bbox[0] && bb[1] >= meta.bbox[1]
+        && bb[2] <= meta.bbox[2] && bb[3] <= meta.bbox[3];
+      if (covered) {
+        state.rawPasses = await fetchPassesLocal(bb);
+        // Null Treffer im Abdeckungsgebiet ist verdächtig (Lücke im Datensatz,
+        // z. B. nicht enthaltenes Land innerhalb der Bbox) → still Overpass probieren.
+        if (!state.rawPasses.length) {
+          try { state.rawPasses = await fetchViaOverpass(); } catch (e) { /* 0 bleibt 0 */ }
         }
-        note.textContent = `OpenStreetMap-Dienst ausgelastet — neuer Versuch (${round}/3) …`;
-      });
+      } else {
+        state.rawPasses = await fetchViaOverpass();
+      }
     }
     rematch();
   } catch (e) {

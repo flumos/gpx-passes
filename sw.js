@@ -1,18 +1,20 @@
 'use strict';
 /* Passjäger Service Worker — Offline-Shell, Tile-Cache, Share-Target. */
 
-const VERSION = 'v13';
+const VERSION = 'v14';
 const SHELL_CACHE = 'pj-shell-' + VERSION;
 const TILE_CACHE = 'pj-tiles';
 const SHARE_CACHE = 'pj-share-in';
+const POI_CACHE = 'pj-pois';
+const POI_LIMIT = 200;
 const TILE_LIMIT = 300;
 
 const SHELL = [
   '/',
   '/index.html',
-  '/app.js?v=13',
-  '/passlib.js?v=13',
-  '/styles.css?v=13',
+  '/app.js?v=14',
+  '/passlib.js?v=14',
+  '/styles.css?v=14',
   '/manifest.webmanifest',
   '/favicon.svg',
   '/vendor/leaflet/leaflet.js',
@@ -47,12 +49,13 @@ self.addEventListener('message', (e) => {
   if (e.data === 'skip-waiting') self.skipWaiting();
 });
 
-async function trimTiles() {
-  const c = await caches.open(TILE_CACHE);
+async function trimTiles() { return trimCache(TILE_CACHE, TILE_LIMIT); }
+async function trimCache(name, limit) {
+  const c = await caches.open(name);
   const keys = await c.keys();
-  if (keys.length > TILE_LIMIT) {
+  if (keys.length > limit) {
     // älteste zuerst löschen (Insertion-Reihenfolge)
-    await Promise.all(keys.slice(0, keys.length - TILE_LIMIT).map((k) => c.delete(k)));
+    await Promise.all(keys.slice(0, keys.length - limit).map((k) => c.delete(k)));
   }
 }
 
@@ -89,6 +92,20 @@ self.addEventListener('fetch', (e) => {
       const hit = await c.match(e.request);
       const fresh = fetch(e.request).then((res) => {
         if (res.ok) { c.put(e.request, res.clone()); trimTiles(); }
+        return res;
+      }).catch(() => hit);
+      return hit || fresh;
+    })());
+    return;
+  }
+
+  /* POI-Kacheln: stale-while-revalidate mit Limit (nicht precached) */
+  if (url.origin === self.location.origin && url.pathname.startsWith('/pois/')) {
+    e.respondWith((async () => {
+      const c = await caches.open(POI_CACHE);
+      const hit = await c.match(e.request);
+      const fresh = fetch(e.request).then((res) => {
+        if (res.ok) { c.put(e.request, res.clone()); trimCache(POI_CACHE, POI_LIMIT); }
         return res;
       }).catch(() => hit);
       return hit || fresh;
