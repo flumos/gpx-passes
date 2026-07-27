@@ -7,12 +7,9 @@
     "directory": "./",
     "binding": "ASSETS"
   },
-  // Analytics Engine: erst im Dashboard aktivieren (Workers → Analytics Engine),
-  // DANN dieses Binding wieder einkommentieren und deployen — worker.js ist ohne
-  // das Binding ein No-Op (env.EVENTS?.writeDataPoint).
-  // "analytics_engine_datasets": [
-  //   { "binding": "EVENTS", "dataset": "passjaeger_events" }
-  // ],
+  "analytics_engine_datasets": [
+    { "binding": "EVENTS", "dataset": "passjaeger_events" }
+  ],
   "routes": [
     { "pattern": "passjaeger.app", "custom_domain": true },
     { "pattern": "www.passjaeger.app", "custom_domain": true }
