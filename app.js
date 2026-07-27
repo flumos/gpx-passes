@@ -1359,8 +1359,12 @@ init();
     });
   }).catch(() => { /* z. B. private mode */ });
   let reloading = false;
+  /* Beim ALLERERSTEN Claim (Erstbesuch, vorher kein Controller) NICHT neu laden —
+     sonst reloadet die Seite mitten in der ersten Nutzung. Reload nur bei echtem
+     Update (Controller existierte schon und wurde ersetzt). */
+  const hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (reloading) return;
+    if (!hadController || reloading) return;
     reloading = true;
     location.reload();
   });
