@@ -667,9 +667,11 @@ function showTab(which) {
   $('#tab-cockpit').hidden = which !== 'cockpit';
   $('#tab-wand').hidden = which !== 'wand';
   $('#tab-bericht').hidden = which !== 'bericht';
-  $('#tab-link-cockpit').setAttribute('aria-current', which === 'cockpit' ? 'page' : 'false');
-  $('#tab-link-wand').setAttribute('aria-current', which === 'wand' ? 'page' : 'false');
-  $('#tab-link-bericht').setAttribute('aria-current', which === 'bericht' ? 'page' : 'false');
+  for (const t of ['cockpit', 'wand', 'bericht']) {
+    $('#tab-link-' + t).setAttribute('aria-current', which === t ? 'page' : 'false');
+    const tb = $('#tabbar-' + t);
+    if (tb) tb.setAttribute('aria-current', which === t ? 'page' : 'false');
+  }
   if (which === 'wand' && state.hits) initPanorama();
   if (which === 'bericht' && state.hits) { renderReport(); geocodeRegions(); }
   if (which === 'cockpit' && map1) setTimeout(() => map1.invalidateSize(), 60);
@@ -750,11 +752,12 @@ function saveSettings() {
   } catch (e) { /* egal */ }
 }
 function reflectSettings() {
-  $$('input[name="tol"], input[name="tol2"]').forEach((r) => {
+  $$('input[name="tol"], input[name="tol2"], input[name="tol3"]').forEach((r) => {
     r.checked = +r.value === state.settings.toleranz;
   });
   $('#sw-water').setAttribute('aria-checked', String(state.settings.hideWater));
   $('#sw-water2').setAttribute('aria-checked', String(state.settings.hideWater));
+  $('#sw-water3').setAttribute('aria-checked', String(state.settings.hideWater));
   $$('input[name="sort"]').forEach((r) => { r.checked = r.value === state.ui.sort; });
   $('#btn-tol-label').textContent = `Toleranz ${state.settings.toleranz} m`;
 }
@@ -1209,12 +1212,13 @@ function init() {
   });
 
   /* Einstellungen */
-  $$('input[name="tol"], input[name="tol2"]').forEach((r) => r.addEventListener('change', () => {
+  $$('input[name="tol"], input[name="tol2"], input[name="tol3"]').forEach((r) => r.addEventListener('change', () => {
     state.settings.toleranz = +r.value; onSettingsChanged();
   }));
   const toggleWater = () => { state.settings.hideWater = !state.settings.hideWater; onSettingsChanged(); };
   $('#sw-water').addEventListener('click', toggleWater);
   $('#sw-water2').addEventListener('click', toggleWater);
+  $('#sw-water3').addEventListener('click', toggleWater);
 
   /* Sortierung */
   $$('input[name="sort"]').forEach((r) => r.addEventListener('change', () => {
@@ -1226,14 +1230,37 @@ function init() {
   }));
 
   /* Header-Aktionen */
-  $('#btn-reset').addEventListener('click', () => {
+  const resetToUpload = () => {
     $('#view-results').hidden = true;
     $('#view-upload').hidden = false;
     $('#file').value = '';
     state.viewer = false;
     history.replaceState(null, '', location.pathname + location.search);
     window.scrollTo({ top: 0 });
+  };
+  $('#btn-reset').addEventListener('click', resetToUpload);
+
+  /* Mobile: Teilen-Icon, Optionen-Sheet, Tab-Bar */
+  $('#btn-share-m').addEventListener('click', openShare);
+  const sheetBd = $('#sheet-backdrop');
+  const openSheet = () => {
+    reflectSettings();
+    sheetBd.hidden = false;
+    requestAnimationFrame(() => sheetBd.classList.add('open'));
+  };
+  const closeSheet = () => {
+    sheetBd.classList.remove('open');
+    setTimeout(() => { sheetBd.hidden = true; }, 180);
+  };
+  $('#btn-more').addEventListener('click', openSheet);
+  sheetBd.addEventListener('click', (e) => { if (e.target === sheetBd) closeSheet(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !sheetBd.hidden) closeSheet();
   });
+  $('#btn-reset-m').addEventListener('click', () => { closeSheet(); resetToUpload(); });
+  for (const t of ['cockpit', 'wand', 'bericht']) {
+    $('#tabbar-' + t).addEventListener('click', (e) => { e.preventDefault(); showTab(t); });
+  }
   $('#btn-tol').addEventListener('click', (e) => {
     e.stopPropagation();
     const pop = $('#tol-popover');

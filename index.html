@@ -17,7 +17,7 @@ if (location.hostname === 'flumos.github.io') {
   integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
 <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
-<link rel="stylesheet" href="styles.css?v=10">
+<link rel="stylesheet" href="styles.css?v=11">
 <style>
 /* ── Passjäger app styles (Nocturne) ─────────────────────────────────── */
 html { color-scheme: dark; }
@@ -391,6 +391,129 @@ tr:hover .region-cell i { opacity: 1; }
   .share-body { grid-template-columns: 1fr; }
   .share-preview { width: 168px; margin: 0 auto; }
 }
+
+/* ═══ Mobile: Tab-Bar, Sheet, Kompakt-Header (<700px) ═══ */
+.m-only { display: none; }
+.tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 1500;
+  display: none; border-top: 1px solid var(--color-divider);
+  background: color-mix(in srgb, var(--color-bg) 92%, black);
+  padding: 6px 0 calc(6px + env(safe-area-inset-bottom));
+}
+.tabbar a {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  font-size: 10.5px; color: var(--color-neutral-500); text-decoration: none; padding-top: 6px;
+}
+.tabbar a i { font-size: 21px; }
+.tabbar a .fil { display: none; }
+.tabbar a[aria-current="page"] { color: var(--color-accent); }
+.tabbar a[aria-current="page"] .fil { display: block; }
+.tabbar a[aria-current="page"] .reg { display: none; }
+.sheet-backdrop {
+  position: fixed; inset: 0; z-index: 1600; background: rgba(0,0,0,.45);
+  opacity: 0; pointer-events: none; transition: opacity 160ms ease;
+}
+.sheet-backdrop.open { opacity: 1; pointer-events: auto; }
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 1601;
+  background: var(--color-surface); border-radius: 16px 16px 0 0;
+  padding: 10px 18px calc(24px + env(safe-area-inset-bottom));
+  box-shadow: var(--shadow-lg);
+  transform: translateY(100%); transition: transform 160ms ease;
+}
+.sheet-backdrop.open .sheet { transform: translateY(0); }
+.sheet .grip { width: 36px; height: 4px; border-radius: 2px; background: var(--color-neutral-700); margin: 4px auto 12px; }
+.sheet-row {
+  display: flex; align-items: center; gap: 14px; padding: 13px 4px;
+  font-size: 14.5px; color: var(--color-text);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-text) 6%, transparent);
+}
+.sheet-row:last-child { border-bottom: none; }
+.sheet-row > i { font-size: 19px; color: var(--color-accent); width: 24px; flex: none; }
+.sheet-row .grow { flex: 1; min-width: 0; }
+button.sheet-row { width: 100%; background: none; border-inline: 0; border-top: 0; font: inherit; text-align: left; cursor: pointer; }
+.seg-sm .seg-opt { padding: 5px 10px; font-size: 12px; }
+.tbl-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+@media (max-width: 700px) {
+  /* Header kompakt */
+  .res-head { padding: 10px 12px; gap: 8px; flex-wrap: nowrap; }
+  .res-head .brand { min-width: 0; flex: 1; }
+  .res-head .brand .name, .res-head .sep { display: none; }
+  .res-head .file { max-width: none; flex: 1; }
+  .res-tabs { display: none; }
+  #btn-tol, #btn-share, #btn-reset { display: none; }
+  .m-only { display: inline-flex; }
+  .res-actions { flex: none; }
+  .tabbar { display: flex; }
+  #view-results { padding-bottom: calc(66px + env(safe-area-inset-bottom)); }
+
+  /* Statbar 2x2 + Hoechster als Vollbreiten-Zeile */
+  .statbar { grid-template-columns: 1fr 1fr; }
+  .statbar > div { padding: 10px 14px; border-bottom: 1px solid var(--color-divider); }
+  .statbar > div:nth-child(2n) { border-right: none; }
+  .statbar > div:nth-child(odd) { border-right: 1px solid var(--color-divider); }
+  .stat-value { font-size: 20px; }
+  .stat-value .sub { font-size: 12px; }
+  .stat-value.longname { font-size: 15px; line-height: 20px; }
+  .statbar > div:nth-child(5) {
+    grid-column: 1 / -1; border-right: none !important; border-bottom: none;
+    display: flex; align-items: baseline; gap: 10px;
+  }
+  .statbar > div:nth-child(5) .stat-value { font-size: 15px; line-height: 1.3; flex: 1; }
+
+  /* Cockpit gestapelt */
+  .cockpit-main { display: block; height: auto; }
+  .map-wrap { height: 315px; border-right: none; border-bottom: 1px solid var(--color-divider); }
+  .map-tags {
+    flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
+    left: 0; right: 0; top: 12px; padding: 0 12px 4px; scrollbar-width: none;
+  }
+  .map-tags::-webkit-scrollbar { display: none; }
+  .map-tags .tag { flex: none; padding: 5px 12px; }
+  .map-zoom .btn { width: 40px; height: 40px; }
+  .trophy-panel { max-height: none; overflow: visible; }
+  .tp-head { padding: 12px 14px 8px; }
+  .tp-list { flex: none; overflow: visible; padding: 0 8px 12px; }
+
+  /* Upload: Mockup-Reihenfolge Headline -> Dropzone -> Einstellungen -> Steps */
+  .up-main { padding: 26px 20px 28px; gap: 22px; }
+  .up-main > div { display: contents; }
+  .up-main .kicker { order: 1; margin-bottom: 0; }
+  .up-main h1 { order: 2; font-size: 30px; margin: 0; }
+  .up-main .lead { order: 3; margin: 0; }
+  .up-main .dropzone { order: 4; }
+  .up-main .settings-card { order: 5; }
+  .up-main .steps { order: 6; }
+  .dz-oder { display: none; }
+  .dropzone { padding: 30px 20px; }
+  .steps { font-size: 12.5px; }
+  .up-head { padding: 12px 16px; }
+  .up-foot { padding: 12px 16px; font-size: 10.5px; gap: 12px; }
+
+  /* Trophaenwand */
+  .statband { padding: 24px 18px; }
+  .statband h1 { font-size: 28px; }
+  .statband .stats { gap: 20px; flex-wrap: wrap; }
+  .statband .stats .v { font-size: 20px; }
+  .wand-sect-head { padding: 22px 18px 6px; flex-wrap: wrap; }
+  .top-grid { padding: 12px 18px 20px; gap: 10px; }
+  .wand-table { padding: 0 18px 10px; }
+  .wand-table table { min-width: 560px; }
+  .panorama { height: 220px; margin: 14px 18px 24px; }
+
+  /* Reisebericht */
+  .report-wrap { padding: 24px 20px 60px; }
+  .report-head h1 { font-size: 24px; }
+  .report-actions { flex-wrap: wrap; }
+  .rp-table { min-width: 520px; }
+
+  /* Teilen-Dialog scrollbar auf kleinen Screens */
+  .dialog { max-height: 90dvh; overflow-y: auto; }
+}
+@media (max-width: 400px) {
+  .top-grid { grid-template-columns: 1fr; }
+}
 </style>
 </head>
 <body>
@@ -472,6 +595,8 @@ tr:hover .region-cell i { opacity: 1; }
       <a href="#" id="tab-link-bericht">Reisebericht</a>
     </nav>
     <div class="res-actions">
+      <button class="btn btn-icon btn-primary m-only" id="btn-share-m" type="button" aria-label="Teilen"><i class="ph ph-share-network"></i></button>
+      <button class="btn btn-icon btn-secondary m-only" id="btn-more" type="button" aria-label="Weitere Optionen"><i class="ph ph-dots-three-outline"></i></button>
       <button class="btn btn-ghost" id="btn-tol" type="button"><i class="ph ph-sliders-horizontal"></i>&nbsp;<span id="btn-tol-label">Toleranz 250 m</span></button>
       <button class="btn btn-primary" id="btn-share" type="button"><i class="ph ph-share-network"></i>&nbsp;Teilen</button>
       <button class="btn btn-secondary" id="btn-reset" type="button"><i class="ph ph-arrow-counter-clockwise"></i>&nbsp;Andere Datei</button>
@@ -570,10 +695,12 @@ tr:hover .region-cell i { opacity: 1; }
     <div class="top-grid" id="top-grid"></div>
     <div class="wand-table">
       <h2>Tagesübersicht</h2>
+      <div class="tbl-scroll">
       <table class="table">
         <thead><tr><th>Tag</th><th>Datum</th><th class="num">km</th><th class="num">Anstieg</th><th class="num">Kurven</th><th class="num">Kehren</th><th class="num">Pässe</th></tr></thead>
         <tbody id="day-tbody"></tbody>
       </table>
+      </div>
     </div>
     <div class="panorama">
       <div id="map2"></div>
@@ -600,10 +727,12 @@ tr:hover .region-cell i { opacity: 1; }
         aria-label="Bericht — manuell kopieren" title="Cmd+C zum Kopieren"></textarea>
 
       <h2>Tagesübersicht</h2>
+      <div class="tbl-scroll">
       <table class="rp-table">
         <thead><tr><th>Tag</th><th>Datum</th><th class="num">km</th><th class="num">Anstieg</th><th style="width:45%">Region</th></tr></thead>
         <tbody id="rp-daytable"></tbody>
       </table>
+      </div>
 
       <h2>Etappen &amp; Pässe</h2>
       <div id="rp-days"></div>
@@ -614,6 +743,38 @@ tr:hover .region-cell i { opacity: 1; }
       <div class="report-foot">Erstellt mit Passjäger · passjaeger.app · Pässe: © OpenStreetMap-Mitwirkende · Regionen: © Nominatim/OSM</div>
     </main>
     <div class="toast" id="rp-toast" hidden><i class="ph ph-check-circle"></i><span id="rp-toast-text"></span></div>
+  </div>
+
+  <!-- Mobile: Tab-Bar -->
+  <nav class="tabbar" id="tabbar" aria-label="Ansichten">
+    <a href="#" id="tabbar-cockpit" aria-current="page"><i class="ph ph-gauge reg"></i><i class="ph-fill ph-gauge fil"></i>Cockpit</a>
+    <a href="#" id="tabbar-wand" aria-current="false"><i class="ph ph-trophy reg"></i><i class="ph-fill ph-trophy fil"></i>Trophäen</a>
+    <a href="#" id="tabbar-bericht" aria-current="false"><i class="ph ph-article reg"></i><i class="ph-fill ph-article fil"></i>Bericht</a>
+  </nav>
+
+  <!-- Mobile: Optionen-Sheet -->
+  <div class="sheet-backdrop" id="sheet-backdrop" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-label="Optionen">
+      <div class="grip"></div>
+      <div class="sheet-row">
+        <i class="ph ph-sliders-horizontal"></i>
+        <span class="grow">Toleranz</span>
+        <div class="seg seg-sm" role="radiogroup" aria-label="Toleranz">
+          <label class="seg-opt"><input type="radio" name="tol3" value="150">150 m</label>
+          <label class="seg-opt"><input type="radio" name="tol3" value="250" checked>250 m</label>
+          <label class="seg-opt"><input type="radio" name="tol3" value="500">500 m</label>
+        </div>
+      </div>
+      <div class="sheet-row">
+        <i class="ph ph-drop-half"></i>
+        <span class="grow">Wasserscheiden ausblenden</span>
+        <button class="switch" id="sw-water3" role="switch" aria-checked="true" aria-label="Wasserscheiden ausblenden"></button>
+      </div>
+      <button class="sheet-row" id="btn-reset-m" type="button">
+        <i class="ph ph-arrow-counter-clockwise"></i>
+        <span class="grow">Andere Datei auswerten</span>
+      </button>
+    </div>
   </div>
 </div>
 
@@ -654,7 +815,7 @@ tr:hover .region-cell i { opacity: 1; }
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
   integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="passlib.js?v=10"></script>
-<script src="app.js?v=10"></script>
+<script src="passlib.js?v=11"></script>
+<script src="app.js?v=11"></script>
 </body>
 </html>
