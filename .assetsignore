@@ -7,3 +7,5 @@ test.mjs
 design_handoff_passjaeger
 node_modules
 tools
+.wrangler
+worker.js
