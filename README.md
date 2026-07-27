@@ -89,6 +89,18 @@ Der OSM-abgeleitete Extrakt wird auf Anfrage gern herausgegeben — er liegt
 ohnehin offen in diesem Repo unter `pois/`. Zum Aktualisieren Pipeline neu
 laufen lassen (resumefähig, Spitzen-Diskbedarf ≈ größtes Land ~5 GB).
 
+## Feedback & anonyme Statistik
+
+Feedback gern über [GitHub Issues](https://github.com/flumos/gpx-passes/issues).
+
+Die Seite zählt anonym ein paar Nutzungsereignisse (Auswertung durchgeführt,
+Link erstellt/geöffnet, Bericht kopiert, Bild geteilt, App installiert) — als
+reine Zähler mit groben Kategorien, umgesetzt in `worker.js` (Cloudflare
+Analytics Engine). **Nicht** gespeichert werden: IP-Adressen, User-Agents,
+IDs, Cookies oder irgendetwas aus GPX-Tracks. `Do Not Track` /
+Global Privacy Control werden respektiert; lokales Opt-out:
+`localStorage.setItem('pj.notrack', '1')`.
+
 ## Lizenz
 
 © 2026 Felix Blume. Der Quellcode ist zur Transparenz einsehbar — die Seite

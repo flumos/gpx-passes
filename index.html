@@ -22,7 +22,7 @@ if (location.hostname === 'flumos.github.io') {
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="vendor/phosphor/regular.css">
 <link rel="stylesheet" href="vendor/phosphor/fill.css">
-<link rel="stylesheet" href="styles.css?v=17">
+<link rel="stylesheet" href="styles.css?v=18">
 <style>
 /* ── Passjäger app styles (Nocturne) ─────────────────────────────────── */
 html { color-scheme: dark; }
@@ -435,6 +435,7 @@ tr:hover .region-cell i { opacity: 1; }
   border-bottom: 1px solid color-mix(in srgb, var(--color-text) 6%, transparent);
 }
 .sheet-row:last-child { border-bottom: none; }
+a.sheet-row { color: inherit; text-decoration: none; }
 .sheet-row > i { font-size: 19px; color: var(--color-accent); width: 24px; flex: none; }
 .sheet-row .grow { flex: 1; min-width: 0; }
 button.sheet-row { width: 100%; background: none; border-inline: 0; border-top: 0; font: inherit; text-align: left; cursor: pointer; }
@@ -599,6 +600,7 @@ button.sheet-row { width: 100%; background: none; border-inline: 0; border-top: 
     <span>Pässe: OpenStreetMap via Overpass API</span>
     <span>Höhenmeter aus dem Track, leicht geglättet</span>
     <span>Karte © OpenStreetMap-Mitwirkende · © CARTO</span>
+    <span><a href="https://github.com/flumos/gpx-passes/issues" target="_blank" rel="noopener">Feedback</a> · Anonyme Nutzungszähler ohne Cookies — was gezählt wird, steht im Repo.</span>
   </footer>
 </div>
 
@@ -797,6 +799,10 @@ button.sheet-row { width: 100%; background: none; border-inline: 0; border-top: 
         <i class="ph ph-device-mobile-camera"></i>
         <span class="grow">Als App installieren</span>
       </button>
+      <a class="sheet-row" href="https://github.com/flumos/gpx-passes/issues" target="_blank" rel="noopener">
+        <i class="ph ph-chat-circle"></i>
+        <span class="grow">Feedback geben</span>
+      </a>
       <button class="sheet-row" id="btn-reset-m" type="button">
         <i class="ph ph-arrow-counter-clockwise"></i>
         <span class="grow">Andere Datei auswerten</span>
@@ -863,7 +869,7 @@ button.sheet-row { width: 100%; background: none; border-inline: 0; border-top: 
 </div>
 
 <script src="vendor/leaflet/leaflet.js"></script>
-<script src="passlib.js?v=17"></script>
-<script src="app.js?v=17"></script>
+<script src="passlib.js?v=18"></script>
+<script src="app.js?v=18"></script>
 </body>
 </html>

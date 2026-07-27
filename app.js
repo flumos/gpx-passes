@@ -70,6 +70,29 @@ function dateRangeLabel(days) {
   return `${+a[2]}.${a[1]}.${a[0]} – ${+b[2]}.${b[1]}.${b[0]}`;
 }
 
+/* ── Anonyme Nutzungszähler (fire-and-forget, DNT respektiert) ── */
+function track(n, d1, d2, d3) {
+  try {
+    if (navigator.doNotTrack === '1' || navigator.globalPrivacyControl) return;
+    if (localStorage.getItem('pj.notrack') === '1') return; // lokales Opt-out (auch für eigene Testläufe)
+    const body = JSON.stringify({ n, d1: d1 || '', d2: d2 || '', d3: d3 || '' });
+    const ok = navigator.sendBeacon
+      && navigator.sendBeacon('/e', new Blob([body], { type: 'application/json' }));
+    if (!ok) fetch('/e', { method: 'POST', body, keepalive: true }).catch(() => {});
+  } catch (e) { /* Zählen darf nie stören */ }
+}
+function analyseBuckets() {
+  let count = 1;
+  try {
+    count = (parseInt(localStorage.getItem('pj.analysen') || '0', 10) || 0) + 1;
+    localStorage.setItem('pj.analysen', String(count));
+  } catch (e) { /* private mode */ }
+  const wiederkehr = count <= 1 ? '1' : (count <= 4 ? '2-4' : '5plus');
+  const n = state.hits ? state.hits.length : 0;
+  const paesse = n === 0 ? '0' : (n <= 10 ? '1-10' : '11plus');
+  return { paesse, wiederkehr };
+}
+
 /* ── Karten ── */
 let map1, map2, routeLayers = {}, markerLayer, pano = {};
 
@@ -695,6 +718,7 @@ async function handleFile(file) {
   state.stats = computeStats(state.pts);
   state.hits = null; state.rawPasses = null;
   state.viewer = false; state.shareUrl = null;
+  state._analyseTracked = false;
   state.ui.stageFilter = null; state.ui.topExpanded = false;
   buildDays();
   computeCurves();
@@ -743,13 +767,15 @@ async function runMatching(refetch) {
         && bb[0] >= meta.bbox[0] && bb[1] >= meta.bbox[1]
         && bb[2] <= meta.bbox[2] && bb[3] <= meta.bbox[3];
       if (covered) {
+        state._poiSource = 'tiles';
         state.rawPasses = await fetchPassesLocal(bb);
         // Null Treffer im Abdeckungsgebiet ist verdächtig (Lücke im Datensatz,
         // z. B. nicht enthaltenes Land innerhalb der Bbox) → still Overpass probieren.
         if (!state.rawPasses.length) {
-          try { state.rawPasses = await fetchViaOverpass(); } catch (e) { /* 0 bleibt 0 */ }
+          try { state.rawPasses = await fetchViaOverpass(); state._poiSource = 'overpass'; } catch (e) { /* 0 bleibt 0 */ }
         }
       } else {
+        state._poiSource = 'overpass';
         state.rawPasses = await fetchViaOverpass();
       }
     }
@@ -765,6 +791,11 @@ function rematch() {
     state.settings.toleranz, state.settings.hideWater);
   for (const h of state.hits) h.day = dayOf(h.idx);
   state.shareUrl = null; // Treffer geändert → Link neu bauen
+  if (!state._analyseTracked) {
+    state._analyseTracked = true;
+    const b = analyseBuckets();
+    track('analyse', state._poiSource || 'tiles', b.paesse, b.wiederkehr);
+  }
   renderHeader(); renderStatbar(); renderPanel(); drawMarkers(); renderWand(); renderReport();
   if (state.ui.stageFilter) applyStageFilter(state.ui.stageFilter);
   if (!$('#tab-wand').hidden) initPanorama();
@@ -1130,6 +1161,7 @@ function closeShare() {
   setTimeout(() => { bd.hidden = true; }, 180);
 }
 async function doDownload() {
+  track('bild_geteilt', 'download');
   const cv = await renderShareCanvas();
   const a = document.createElement('a');
   a.download = `passjaeger-${(state.fileName || 'tour').replace(/\.gpx$/i, '')}.png`;
@@ -1137,6 +1169,7 @@ async function doDownload() {
   a.click();
 }
 async function doShare() {
+  track('bild_geteilt', 'share');
   const cv = await renderShareCanvas();
   const blob = await new Promise((res) => cv.toBlob(res, 'image/png'));
   const file = new File([blob], 'passjaeger-tour.png', { type: 'image/png' });
@@ -1191,6 +1224,7 @@ async function buildShareLink() {
   const raw = new TextEncoder().encode(payload);
   const packed = await compressBytes(raw);
   const body = packed ? '1' + b64urlFromBytes(packed) : '0' + b64urlFromBytes(raw);
+  track('link_erstellt');
   return `${location.origin}${location.pathname}#t=${body}`;
 }
 async function loadFromLink(body) {
@@ -1225,7 +1259,8 @@ async function loadFromLink(body) {
     $('#btn-tol').hidden = true; // ohne Roh-Track kein Rematch
     showTab('cockpit');
     renderHeader(); renderStatbar(); renderPanel();
-    drawTrack(); renderMapTags(); drawMarkers(); renderWand(); renderReport();
+    drawTrack(); renderMapTags(); drawMarkers(); renderWand();
+    track('link_geoeffnet'); renderReport();
     return true;
   } catch (e) {
     console.error('Geteilter Link konnte nicht gelesen werden:', e);
@@ -1239,6 +1274,12 @@ function init() {
 
   /* Upload */
   const drop = $('#dropzone'), fileInput = $('#file');
+  // iOS graut .gpx im Dateipicker aus (keine GPX-UTI im System) — dort den
+  // accept-Filter entfernen; die echte Validierung macht parseGpx.
+  if (/iPad|iPhone|iPod/.test(navigator.userAgent)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+    fileInput.removeAttribute('accept');
+  }
   fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
   ['dragover', 'dragenter'].forEach((ev) => drop.addEventListener(ev, (e) => {
     e.preventDefault(); drop.classList.add('over');
@@ -1318,8 +1359,8 @@ function init() {
   $('#tab-link-bericht').addEventListener('click', (e) => { e.preventDefault(); showTab('bericht'); });
 
   /* Reisebericht kopieren */
-  $('#btn-copy-report').addEventListener('click', () => copyReport(false));
-  $('#btn-copy-wa').addEventListener('click', () => copyReport(true));
+  $('#btn-copy-report').addEventListener('click', () => { copyReport(false); track('bericht_kopiert', 'text'); });
+  $('#btn-copy-wa').addEventListener('click', () => { copyReport(true); track('bericht_kopiert', 'whatsapp'); });
 
   /* Teilen */
   $('#btn-share').addEventListener('click', openShare);

@@ -1,10 +1,15 @@
 {
-  // Cloudflare Workers — statische Seite via Static Assets (kein Worker-Script nötig)
+  // Cloudflare Workers — statische Seite + Mini-Worker für anonyme Event-Zähler
   "name": "gpx-passes",
+  "main": "worker.js",
   "compatibility_date": "2026-07-01",
   "assets": {
-    "directory": "./"
+    "directory": "./",
+    "binding": "ASSETS"
   },
+  "analytics_engine_datasets": [
+    { "binding": "EVENTS", "dataset": "passjaeger_events" }
+  ],
   "routes": [
     { "pattern": "passjaeger.app", "custom_domain": true },
     { "pattern": "www.passjaeger.app", "custom_domain": true }
