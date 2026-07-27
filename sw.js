@@ -1,7 +1,7 @@
 'use strict';
 /* Passjäger Service Worker — Offline-Shell, Tile-Cache, Share-Target. */
 
-const VERSION = 'v16';
+const VERSION = 'v17';
 const SHELL_CACHE = 'pj-shell-' + VERSION;
 const TILE_CACHE = 'pj-tiles';
 const SHARE_CACHE = 'pj-share-in';
@@ -12,9 +12,9 @@ const TILE_LIMIT = 300;
 const SHELL = [
   '/',
   '/index.html',
-  '/app.js?v=16',
-  '/passlib.js?v=16',
-  '/styles.css?v=16',
+  '/app.js?v=17',
+  '/passlib.js?v=17',
+  '/styles.css?v=17',
   '/manifest.webmanifest',
   '/favicon.svg',
   '/favicon.ico',

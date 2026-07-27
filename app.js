@@ -837,12 +837,25 @@ async function renderShareCanvas() {
 
   let y = 75;
   /* Brand-Zeile */
-  const mount = phGlyph('ph-mountains', true);
   ctx.textBaseline = 'middle';
   let bx = PADX;
-  if (mount) {
-    ctx.font = '38px "Phosphor-Fill"'; ctx.fillStyle = C.accent;
-    ctx.fillText(mount, bx, y + 15); bx += 52;
+  // App-Icon (Sunset-Badge) als Brand-Marke; Fallback: Phosphor-Glyphe
+  try {
+    if (!renderShareCanvas._icon) {
+      const im = new Image(); im.src = 'icons/icon-192.png';
+      await im.decode(); renderShareCanvas._icon = im;
+    }
+    const S = 44;
+    ctx.save(); ctx.beginPath();
+    ctx.arc(bx + S / 2, y + 15, S / 2, 0, Math.PI * 2); ctx.clip();
+    ctx.drawImage(renderShareCanvas._icon, bx, y + 15 - S / 2, S, S);
+    ctx.restore(); bx += S + 16;
+  } catch (e) {
+    const mount = phGlyph('ph-mountains', true);
+    if (mount) {
+      ctx.font = '38px "Phosphor-Fill"'; ctx.fillStyle = C.accent;
+      ctx.fillText(mount, bx, y + 15); bx += 52;
+    }
   }
   ctx.font = '500 30px Inter'; ctx.fillStyle = C.n400;
   ctx.fillText('Passjäger', bx, y + 15);
