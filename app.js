@@ -1299,6 +1299,12 @@ function init() {
   /* Geteilter Link? Dann direkt ins Cockpit */
   const m = location.hash.match(/^#t=(.+)$/);
   if (m) loadFromLink(m[1]);
+  /* Auch ohne Reload reagieren — z. B. Link öffnen, während die Seite schon offen ist
+     (Same-Origin-Hash-Navigation löst kein Page-Load aus, nur hashchange) */
+  window.addEventListener('hashchange', () => {
+    const mh = location.hash.match(/^#t=(.+)$/);
+    if (mh) loadFromLink(mh[1]);
+  });
 }
 init();
 
