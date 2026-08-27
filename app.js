@@ -16,7 +16,9 @@ const C = {
   text: '#e9e9ed', bg: '#161826', mapbg: '#14162a', contour: '#252840',
   white: '#f5f4ff',
 };
-const TILE_URL = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+// CARTO-Basemaps brauchen seit 2026-08 einen API-Key — Esri Dark Gray ist keyless (Achtung: {z}/{y}/{x}-Reihenfolge)
+const TILE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
+const TILE_REF_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}';
 
 /* ── State ── */
 const state = {
@@ -97,7 +99,10 @@ function analyseBuckets() {
 let map1, map2, routeLayers = {}, markerLayer, pano = {};
 
 function tiles() {
-  return L.tileLayer(TILE_URL, { maxZoom: 18, subdomains: 'abcd' });
+  return L.layerGroup([
+    L.tileLayer(TILE_URL, { maxNativeZoom: 16, maxZoom: 18 }),
+    L.tileLayer(TILE_REF_URL, { maxNativeZoom: 16, maxZoom: 18, opacity: 0.55 }),
+  ]);
 }
 function initMap1() {
   if (map1) return;

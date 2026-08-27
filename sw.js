@@ -1,7 +1,7 @@
 'use strict';
 /* Passjäger Service Worker — Offline-Shell, Tile-Cache, Share-Target. */
 
-const VERSION = 'v18';
+const VERSION = 'v19';
 const SHELL_CACHE = 'pj-shell-' + VERSION;
 const TILE_CACHE = 'pj-tiles';
 const SHARE_CACHE = 'pj-share-in';
@@ -12,9 +12,9 @@ const TILE_LIMIT = 300;
 const SHELL = [
   '/',
   '/index.html',
-  '/app.js?v=18',
-  '/passlib.js?v=18',
-  '/styles.css?v=18',
+  '/app.js?v=19',
+  '/passlib.js?v=19',
+  '/styles.css?v=19',
   '/manifest.webmanifest',
   '/favicon.svg',
   '/favicon.ico',
@@ -86,8 +86,8 @@ self.addEventListener('fetch', (e) => {
   /* Nominatim/Overpass nie anfassen */
   if (/nominatim|overpass/.test(url.hostname)) return;
 
-  /* CARTO-Tiles: stale-while-revalidate mit Limit */
-  if (url.hostname.endsWith('cartocdn.com')) {
+  /* Basemap-Tiles (Esri, alt CARTO): stale-while-revalidate mit Limit */
+  if (url.hostname.endsWith('cartocdn.com') || url.hostname.endsWith('arcgisonline.com')) {
     e.respondWith((async () => {
       const c = await caches.open(TILE_CACHE);
       const hit = await c.match(e.request);
